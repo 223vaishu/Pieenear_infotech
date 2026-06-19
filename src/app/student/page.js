@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "../lib/supabaseClient";
 
 export default function StudentDashboard() {
   const router = useRouter();
   const [studentInfo, setStudentInfo] = useState(null);
   const [activeTab, setActiveTab] = useState("desk"); // 'desk', 'exams', 'certificates', 'doubt', 'profile'
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // Data lists
   const [exams, setExams] = useState([]);
@@ -242,7 +244,6 @@ export default function StudentDashboard() {
     showToast("Doubt logged. Instructor notified!", "success");
   };
 
-  // Change password credentials
   const handleChangePassword = (e) => {
     e.preventDefault();
     if (newPassword.length < 6) {
@@ -254,18 +255,35 @@ export default function StudentDashboard() {
       return;
     }
 
-    // Update students globally
-    const stored = JSON.parse(localStorage.getItem("pieenear_students") || "[]");
-    const updatedStored = stored.map((s) => {
-      if (s.email.toLowerCase() === studentInfo.email.toLowerCase()) {
-        return { ...s, password: newPassword };
-      }
-      return s;
-    });
-    localStorage.setItem("pieenear_students", JSON.stringify(updatedStored));
-    showToast("Security keys updated!", "success");
-    setNewPassword("");
-    setConfirmPassword("");
+    // Update Supabase Auth password
+    supabase.auth.updateUser({ password: newPassword })
+      .then(({ data, error }) => {
+        if (error) throw error;
+        showToast("Password updated in Supabase Auth successfully!", "success");
+        
+        // Update local storage session metadata to sync password key
+        if (studentInfo) {
+          const updated = { ...studentInfo, password: newPassword };
+          setStudentInfo(updated);
+          localStorage.setItem("currentStudent", JSON.stringify(updated));
+        }
+      })
+      .catch((err) => {
+        showToast(err.message, "danger");
+        // Fallback
+        const stored = JSON.parse(localStorage.getItem("pieenear_students") || "[]");
+        const updatedStored = stored.map((s) => {
+          if (s.email.toLowerCase() === studentInfo.email.toLowerCase()) {
+            return { ...s, password: newPassword };
+          }
+          return s;
+        });
+        localStorage.setItem("pieenear_students", JSON.stringify(updatedStored));
+      })
+      .finally(() => {
+        setNewPassword("");
+        setConfirmPassword("");
+      });
   };
 
   const handleLogout = () => {
@@ -305,9 +323,34 @@ export default function StudentDashboard() {
         </div>
       )}
 
+      {/* Mobile Header */}
+      {!activeExam && (
+        <div className="mobile-header">
+          <button
+            className={`hamburger-btn ${sidebarOpen ? "open" : ""}`}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Toggle Sidebar Menu"
+          >
+            <span className="hamburger-line"></span>
+            <span className="hamburger-line"></span>
+            <span className="hamburger-line"></span>
+          </button>
+          <div className="mobile-header-brand">
+            <span style={styles.logoIcon}>P</span>
+            <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "#fff" }}>Pieenear</span>
+          </div>
+          <div style={{ width: "22px" }}></div>
+        </div>
+      )}
+
+      {/* Sidebar Scrim Overlay */}
+      {!activeExam && (
+        <div className={`sidebar-overlay ${sidebarOpen ? "active" : ""}`} onClick={() => setSidebarOpen(false)}></div>
+      )}
+
       {/* Sidebar navigation */}
       {!activeExam && (
-        <aside className="sidebar" style={styles.sidebar}>
+        <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} style={styles.sidebar}>
           <div style={styles.brandContainer}>
             <span style={styles.logoIcon}>P</span>
             <div>
@@ -323,7 +366,7 @@ export default function StudentDashboard() {
                 backgroundColor: activeTab === "desk" ? "rgba(99, 102, 241, 0.15)" : "transparent",
                 color: activeTab === "desk" ? "var(--accent-primary)" : "var(--text-secondary)"
               }}
-              onClick={() => setActiveTab("desk")}
+              onClick={() => { setActiveTab("desk"); setSidebarOpen(false); }}
             >
               💻 My Study Desk
             </button>
@@ -333,7 +376,7 @@ export default function StudentDashboard() {
                 backgroundColor: activeTab === "exams" ? "rgba(99, 102, 241, 0.15)" : "transparent",
                 color: activeTab === "exams" ? "var(--accent-primary)" : "var(--text-secondary)"
               }}
-              onClick={() => setActiveTab("exams")}
+              onClick={() => { setActiveTab("exams"); setSidebarOpen(false); }}
             >
               📝 Exams Workspace
             </button>
@@ -343,7 +386,7 @@ export default function StudentDashboard() {
                 backgroundColor: activeTab === "certificates" ? "rgba(99, 102, 241, 0.15)" : "transparent",
                 color: activeTab === "certificates" ? "var(--accent-primary)" : "var(--text-secondary)"
               }}
-              onClick={() => setActiveTab("certificates")}
+              onClick={() => { setActiveTab("certificates"); setSidebarOpen(false); }}
             >
               🏆 Certificates Vault
             </button>
@@ -353,7 +396,7 @@ export default function StudentDashboard() {
                 backgroundColor: activeTab === "doubt" ? "rgba(99, 102, 241, 0.15)" : "transparent",
                 color: activeTab === "doubt" ? "var(--accent-primary)" : "var(--text-secondary)"
               }}
-              onClick={() => setActiveTab("doubt")}
+              onClick={() => { setActiveTab("doubt"); setSidebarOpen(false); }}
             >
               🙋 Doubt Support
             </button>
@@ -363,7 +406,7 @@ export default function StudentDashboard() {
                 backgroundColor: activeTab === "profile" ? "rgba(99, 102, 241, 0.15)" : "transparent",
                 color: activeTab === "profile" ? "var(--accent-primary)" : "var(--text-secondary)"
               }}
-              onClick={() => setActiveTab("profile")}
+              onClick={() => { setActiveTab("profile"); setSidebarOpen(false); }}
             >
               ⚙️ Security Profile
             </button>
@@ -385,7 +428,7 @@ export default function StudentDashboard() {
       )}
 
       {/* Main Panel Content */}
-      <main className="main-content" style={{ ...styles.main, padding: activeExam ? "40px 10%" : "40px" }}>
+      <main className={`main-content ${activeExam ? 'exam-mode' : ''}`} style={styles.main}>
         
         {/* Active Exam distractor free view */}
         {activeExam ? (
@@ -620,7 +663,7 @@ export default function StudentDashboard() {
                   </div>
                 </div>
 
-                <div style={styles.deskGrid}>
+                <div className="desk-grid">
                   {/* Notices board */}
                   <div className="glass-panel" style={styles.announcementCard}>
                     <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📢 Announcements</h3>

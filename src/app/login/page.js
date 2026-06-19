@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Login() {
   const router = useRouter();
@@ -29,22 +30,67 @@ export default function Login() {
     setError("");
     setLoading(true);
 
-    // Simulate network delay
-    setTimeout(() => {
+    // Safety fallback check if Supabase client failed to initialize
+    if (!supabase || !supabase.auth) {
+      console.warn("Supabase client is not active. Using local fallback.");
+      runLocalFallback("Supabase client is not initialized. Using local fallback.");
+      return;
+    }
+
+    supabase.auth.signInWithPassword({ email: email.trim(), password })
+      .then(({ data, error: sbError }) => {
+        if (sbError) {
+          console.warn("Supabase auth failed, using local fallback:", sbError.message);
+          runLocalFallback(sbError.message);
+          return;
+        }
+
+        const user = data.user;
+        const metadata = user.user_metadata || {};
+        const role = metadata.role === "admin" || email.trim() === "admin@pieenear.com" ? "admin" : "student";
+
+        if (activeTab !== role) {
+          setError(`This email is registered as a ${role}. Please switch tabs.`);
+          supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+
+        localStorage.setItem("userRole", role);
+        localStorage.setItem("userEmail", user.email);
+
+        if (role === "admin") {
+          localStorage.setItem("userName", metadata.name || "Portal Administrator");
+          router.push("/admin");
+        } else {
+          const studentProfile = {
+            id: user.id,
+            name: metadata.name || "Alex Mercer",
+            email: user.email,
+            course: metadata.course || "Full-Stack Web Development",
+            joinedDate: metadata.joinedDate || "June 2026",
+            status: metadata.status || "Active"
+          };
+          localStorage.setItem("currentStudent", JSON.stringify(studentProfile));
+          router.push("/student");
+        }
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+
+    // Helper for local fallback authentication
+    function runLocalFallback(errorMessage = "") {
       if (activeTab === "admin") {
         if (email.trim() === "admin@pieenear.com" && password === "admin123") {
-          // Store session
           localStorage.setItem("userRole", "admin");
           localStorage.setItem("userEmail", "admin@pieenear.com");
           localStorage.setItem("userName", "Portal Administrator");
           router.push("/admin");
-        } else {
-          setError("Invalid admin credentials. Use admin@pieenear.com and admin123.");
-          setLoading(false);
+          return;
         }
       } else {
-        // Student Login logic
-        // 1. Check default student
         let matchedStudent = null;
         if (email.trim() === "student@pieenear.com" && password === "student123") {
           matchedStudent = {
@@ -55,26 +101,23 @@ export default function Login() {
             status: "Active"
           };
         } else {
-          // 2. Check localStorage created students
           const storedStudents = JSON.parse(localStorage.getItem("pieenear_students") || "[]");
           const found = storedStudents.find(
             (s) => s.email.toLowerCase() === email.trim().toLowerCase() && s.password === password
           );
-          if (found) {
-            matchedStudent = found;
-          }
+          if (found) matchedStudent = found;
         }
 
         if (matchedStudent) {
           localStorage.setItem("userRole", "student");
           localStorage.setItem("currentStudent", JSON.stringify(matchedStudent));
           router.push("/student");
-        } else {
-          setError("Invalid credentials. Try student@pieenear.com/student123 or check Admin generated credentials.");
-          setLoading(false);
+          return;
         }
       }
-    }, 1200);
+      setError(errorMessage || "Invalid credentials. Switch tabs or check configurations.");
+      setLoading(false);
+    }
   };
 
   return (

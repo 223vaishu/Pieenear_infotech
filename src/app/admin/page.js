@@ -7,6 +7,7 @@ import Link from "next/link";
 export default function AdminDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview"); // 'overview', 'students', 'exams', 'results', 'certificates'
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [students, setStudents] = useState([]);
   const [exams, setExams] = useState([]);
   const [results, setResults] = useState([]);
@@ -44,19 +45,28 @@ export default function AdminDashboard() {
       return;
     }
 
-    // 1. Seed & Load Students
-    const storedStudents = localStorage.getItem("pieenear_students");
-    if (storedStudents) {
-      setStudents(JSON.parse(storedStudents));
-    } else {
-      const initialStudents = [
-        { id: "std-1", name: "Alex Mercer", email: "student@pieenear.com", password: "student123", course: "Full-Stack Web Development", joinedDate: "June 2026", status: "Active" },
-        { id: "std-2", name: "Clara Oswald", email: "clara.o@pieenear.com", password: "claraPass9", course: "UI/UX Core Design", joinedDate: "June 2026", status: "Active" },
-        { id: "std-3", name: "John Doe", email: "john.doe@pieenear.com", password: "johnPass78", course: "Data Science & ML", joinedDate: "May 2026", status: "Suspended" }
-      ];
-      localStorage.setItem("pieenear_students", JSON.stringify(initialStudents));
-      setStudents(initialStudents);
-    }
+    // 1. Load Students from Supabase Auth API
+    fetch("/api/students")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        setStudents(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load students:", err?.message || err);
+        const storedStudents = localStorage.getItem("pieenear_students");
+        if (storedStudents) {
+          setStudents(JSON.parse(storedStudents));
+        } else {
+          const initialStudents = [
+            { id: "std-1", name: "Alex Mercer", email: "student@pieenear.com", password: "student123", course: "Full-Stack Web Development", joinedDate: "June 2026", status: "Active" },
+            { id: "std-2", name: "Clara Oswald", email: "clara.o@pieenear.com", password: "claraPass9", course: "UI/UX Core Design", joinedDate: "June 2026", status: "Active" },
+            { id: "std-3", name: "John Doe", email: "john.doe@pieenear.com", password: "johnPass78", course: "Data Science & ML", joinedDate: "May 2026", status: "Suspended" }
+          ];
+          localStorage.setItem("pieenear_students", JSON.stringify(initialStudents));
+          setStudents(initialStudents);
+        }
+      });
 
     // 2. Seed & Load Exams
     const storedExams = localStorage.getItem("pieenear_exams");
@@ -198,49 +208,102 @@ export default function AdminDashboard() {
     }
 
     if (editingStudentId) {
-      // Edit student
-      const updated = students.map((s) => {
-        if (s.id === editingStudentId) {
-          return {
-            ...s,
-            name: studentName.trim(),
-            email: studentEmail.trim().toLowerCase(),
-            password: studentPassword,
-            course: selectedCourse
-          };
-        }
-        return s;
-      });
-      localStorage.setItem("pieenear_students", JSON.stringify(updated));
-      setStudents(updated);
-      showToast("Student profile updated!", "success");
-      setEditingStudentId(null);
+      // Edit student in Supabase
+      const payload = {
+        id: editingStudentId,
+        name: studentName.trim(),
+        email: studentEmail.trim().toLowerCase(),
+        password: studentPassword,
+        course: selectedCourse
+      };
+
+      fetch("/api/students", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.error) throw new Error(data.error);
+          showToast("Student profile updated in Supabase!", "success");
+          return fetch("/api/students");
+        })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.error) setStudents(data);
+        })
+        .catch((err) => {
+          showToast(err.message, "danger");
+          // Local fallback
+          const updated = students.map((s) => {
+            if (s.id === editingStudentId) {
+              return { ...s, name: studentName.trim(), email: studentEmail.trim().toLowerCase(), password: studentPassword, course: selectedCourse };
+            }
+            return s;
+          });
+          localStorage.setItem("pieenear_students", JSON.stringify(updated));
+          setStudents(updated);
+        })
+        .finally(() => {
+          setEditingStudentId(null);
+          setStudentName("");
+          setStudentEmail("");
+          setStudentPassword("");
+          setShowAddForm(false);
+        });
     } else {
-      // Add student
+      // Add student to Supabase
       const emailExists = students.some((s) => s.email.toLowerCase() === studentEmail.trim().toLowerCase());
       if (emailExists) {
         showToast("Student email already registered", "danger");
         return;
       }
-      const newStudent = {
-        id: "std-" + Date.now(),
+
+      const payload = {
         name: studentName.trim(),
         email: studentEmail.trim().toLowerCase(),
         password: studentPassword,
-        course: selectedCourse,
-        joinedDate: new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }),
-        status: "Active"
+        course: selectedCourse
       };
-      const updated = [newStudent, ...students];
-      localStorage.setItem("pieenear_students", JSON.stringify(updated));
-      setStudents(updated);
-      showToast("Student profile created!", "success");
-    }
 
-    setStudentName("");
-    setStudentEmail("");
-    setStudentPassword("");
-    setShowAddForm(false);
+      fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.error) throw new Error(data.error);
+          showToast("Student profile registered in Supabase!", "success");
+          return fetch("/api/students");
+        })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.error) setStudents(data);
+        })
+        .catch((err) => {
+          showToast(err.message, "danger");
+          // Local fallback
+          const newStudent = {
+            id: "std-" + Date.now(),
+            name: studentName.trim(),
+            email: studentEmail.trim().toLowerCase(),
+            password: studentPassword,
+            course: selectedCourse,
+            joinedDate: new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+            status: "Active"
+          };
+          const updated = [newStudent, ...students];
+          localStorage.setItem("pieenear_students", JSON.stringify(updated));
+          setStudents(updated);
+        })
+        .finally(() => {
+          setStudentName("");
+          setStudentEmail("");
+          setStudentPassword("");
+          setShowAddForm(false);
+        });
+    }
   };
 
   const handleEditClick = (student) => {
@@ -253,36 +316,87 @@ export default function AdminDashboard() {
   };
 
   const handleResetPassword = (id, name) => {
-    const updated = students.map((s) => {
-      if (s.id === id) {
-        const nextPwd = "pass" + Math.floor(100 + Math.random() * 900);
+    const nextPwd = "pass" + Math.floor(100 + Math.random() * 900);
+    fetch("/api/students", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, password: nextPwd })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
         showToast(`Reset ${name}'s password to: ${nextPwd}`, "info");
-        return { ...s, password: nextPwd };
-      }
-      return s;
-    });
-    localStorage.setItem("pieenear_students", JSON.stringify(updated));
-    setStudents(updated);
+        return fetch("/api/students");
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.error) setStudents(data);
+      })
+      .catch((err) => {
+        showToast(err.message, "danger");
+        // Local fallback
+        const updated = students.map((s) => {
+          if (s.id === id) return { ...s, password: nextPwd };
+          return s;
+        });
+        localStorage.setItem("pieenear_students", JSON.stringify(updated));
+        setStudents(updated);
+      });
   };
 
   const handleToggleStatus = (id) => {
-    const updated = students.map((s) => {
-      if (s.id === id) {
-        const nextStatus = s.status === "Active" ? "Suspended" : "Active";
-        showToast(`${s.name} status is now ${nextStatus}`, "info");
-        return { ...s, status: nextStatus };
-      }
-      return s;
-    });
-    localStorage.setItem("pieenear_students", JSON.stringify(updated));
-    setStudents(updated);
+    const student = students.find(s => s.id === id);
+    if (!student) return;
+    const nextStatus = student.status === "Active" ? "Suspended" : "Active";
+    
+    fetch("/api/students", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: nextStatus })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        showToast(`${student.name} status is now ${nextStatus}`, "info");
+        return fetch("/api/students");
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.error) setStudents(data);
+      })
+      .catch((err) => {
+        showToast(err.message, "danger");
+        // Local fallback
+        const updated = students.map((s) => {
+          if (s.id === id) return { ...s, status: nextStatus };
+          return s;
+        });
+        localStorage.setItem("pieenear_students", JSON.stringify(updated));
+        setStudents(updated);
+      });
   };
 
   const handleDeleteStudent = (id, name) => {
-    const updated = students.filter((s) => s.id !== id);
-    localStorage.setItem("pieenear_students", JSON.stringify(updated));
-    setStudents(updated);
-    showToast(`Deleted student account: ${name}`, "info");
+    fetch(`/api/students?id=${id}`, {
+      method: "DELETE"
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        showToast(`Deleted student account: ${name}`, "info");
+        return fetch("/api/students");
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.error) setStudents(data);
+      })
+      .catch((err) => {
+        showToast(err.message, "danger");
+        // Local fallback
+        const updated = students.filter((s) => s.id !== id);
+        localStorage.setItem("pieenear_students", JSON.stringify(updated));
+        setStudents(updated);
+      });
   };
 
   // Exam creator functions
@@ -413,8 +527,29 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Mobile Header */}
+      <div className="mobile-header">
+        <button
+          className={`hamburger-btn ${sidebarOpen ? "open" : ""}`}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          aria-label="Toggle Sidebar Menu"
+        >
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+        </button>
+        <div className="mobile-header-brand">
+          <span style={styles.logoIcon}>P</span>
+          <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "#fff" }}>Pieenear</span>
+        </div>
+        <div style={{ width: "22px" }}></div>
+      </div>
+
+      {/* Sidebar Scrim Overlay */}
+      <div className={`sidebar-overlay ${sidebarOpen ? "active" : ""}`} onClick={() => setSidebarOpen(false)}></div>
+
       {/* Sidebar Panel */}
-      <aside className="sidebar" style={styles.sidebar}>
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} style={styles.sidebar}>
         <div style={styles.brandContainer}>
           <span style={styles.logoIcon}>P</span>
           <div>
@@ -430,7 +565,7 @@ export default function AdminDashboard() {
               backgroundColor: activeTab === "overview" ? "rgba(99, 102, 241, 0.15)" : "transparent",
               color: activeTab === "overview" ? "var(--accent-primary)" : "var(--text-secondary)"
             }}
-            onClick={() => { setActiveTab("overview"); setShowCreateExam(false); setShowAddForm(false); }}
+            onClick={() => { setActiveTab("overview"); setShowCreateExam(false); setShowAddForm(false); setSidebarOpen(false); }}
           >
             📊 Console Overview
           </button>
@@ -440,7 +575,7 @@ export default function AdminDashboard() {
               backgroundColor: activeTab === "students" ? "rgba(99, 102, 241, 0.15)" : "transparent",
               color: activeTab === "students" ? "var(--accent-primary)" : "var(--text-secondary)"
             }}
-            onClick={() => { setActiveTab("students"); setShowCreateExam(false); }}
+            onClick={() => { setActiveTab("students"); setShowCreateExam(false); setSidebarOpen(false); }}
           >
             🧑‍🎓 Student Manager
           </button>
@@ -450,7 +585,7 @@ export default function AdminDashboard() {
               backgroundColor: activeTab === "exams" ? "rgba(99, 102, 241, 0.15)" : "transparent",
               color: activeTab === "exams" ? "var(--accent-primary)" : "var(--text-secondary)"
             }}
-            onClick={() => { setActiveTab("exams"); setShowAddForm(false); }}
+            onClick={() => { setActiveTab("exams"); setShowAddForm(false); setSidebarOpen(false); }}
           >
             📝 Exam Manager
           </button>
@@ -460,7 +595,7 @@ export default function AdminDashboard() {
               backgroundColor: activeTab === "results" ? "rgba(99, 102, 241, 0.15)" : "transparent",
               color: activeTab === "results" ? "var(--accent-primary)" : "var(--text-secondary)"
             }}
-            onClick={() => { setActiveTab("results"); setShowCreateExam(false); setShowAddForm(false); }}
+            onClick={() => { setActiveTab("results"); setShowCreateExam(false); setShowAddForm(false); setSidebarOpen(false); }}
           >
             📈 Results Desk
           </button>
@@ -470,7 +605,7 @@ export default function AdminDashboard() {
               backgroundColor: activeTab === "certificates" ? "rgba(99, 102, 241, 0.15)" : "transparent",
               color: activeTab === "certificates" ? "var(--accent-primary)" : "var(--text-secondary)"
             }}
-            onClick={() => { setActiveTab("certificates"); setShowCreateExam(false); setShowAddForm(false); }}
+            onClick={() => { setActiveTab("certificates"); setShowCreateExam(false); setShowAddForm(false); setSidebarOpen(false); }}
           >
             🏆 Certificate Vault
           </button>
@@ -509,25 +644,25 @@ export default function AdminDashboard() {
         {/* OVERVIEW PANEL */}
         {activeTab === "overview" && (
           <div className="animate-fade-in" style={styles.section}>
-            <div style={styles.statsRow}>
-              <div className="glass-panel" style={styles.metricCard}>
+            <div className="stats-grid">
+              <div className="glass-panel glass-panel-hover" style={styles.metricCard}>
                 <p style={styles.metricLabel}>Total Students</p>
                 <h2 style={styles.metricValue}>{students.length}</h2>
                 <span style={{ color: "var(--accent-emerald)", fontSize: "0.8rem" }}>Profiles Active</span>
               </div>
-              <div className="glass-panel" style={styles.metricCard}>
+              <div className="glass-panel glass-panel-hover" style={styles.metricCard}>
                 <p style={styles.metricLabel}>Exams Configured</p>
                 <h2 style={{ ...styles.metricValue, color: "var(--accent-secondary)" }}>{exams.length}</h2>
                 <span style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>MCQ Banks Live</span>
               </div>
-              <div className="glass-panel" style={styles.metricCard}>
+              <div className="glass-panel glass-panel-hover" style={styles.metricCard}>
                 <p style={styles.metricLabel}>Results Logs</p>
                 <h2 style={{ ...styles.metricValue, color: "var(--accent-cyan)" }}>{results.length}</h2>
                 <span style={{ color: "var(--accent-cyan)", fontSize: "0.8rem" }}>Attempts recorded</span>
               </div>
             </div>
 
-            <div style={styles.analyticsSection}>
+            <div className="analytics-grid">
               <div className="glass-panel" style={styles.chartCard}>
                 <h3 style={styles.chartTitle}>Student Registration & Test Cycles</h3>
                 <div style={styles.svgContainer}>
