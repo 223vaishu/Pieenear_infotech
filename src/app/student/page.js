@@ -39,6 +39,29 @@ export default function StudentDashboard() {
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState("success");
 
+  // Study Desk / Course Curriculum state
+  const [quizProgress, setQuizProgress] = useState({}); // { 1: true/false, ... }
+  const [expandedWeek, setExpandedWeek] = useState(null); // number (1-4) or null
+  const [selectedQuizOption, setSelectedQuizOption] = useState({}); // { weekNum: optionString }
+  const [quizFeedback, setQuizFeedback] = useState({}); // { weekNum: { isCorrect, text } }
+
+  // Theme settings state
+  const [theme, setTheme] = useState("light");
+
+  // Load and apply theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") || "light";
+    setTheme(savedTheme);
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  }, []);
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
+    showToast(`Display mode updated to ${newTheme === "light" ? "Light" : "Dark"}!`, "success");
+  };
+
   // Initial load
   useEffect(() => {
     const role = localStorage.getItem("userRole");
@@ -49,24 +72,143 @@ export default function StudentDashboard() {
 
     // Load Student Info
     const current = localStorage.getItem("currentStudent");
+    let email = "student@pieenear.com";
     if (current) {
-      setStudentInfo(JSON.parse(current));
+      const parsed = JSON.parse(current);
+      setStudentInfo(parsed);
+      email = parsed.email;
     } else {
       const defaultStudent = {
         name: "Alex Mercer",
         email: "student@pieenear.com",
-        course: "Full-Stack Web Development",
+        course: "Web Development",
         joinedDate: "June 2026",
         status: "Active"
       };
       localStorage.setItem("currentStudent", JSON.stringify(defaultStudent));
       setStudentInfo(defaultStudent);
+      email = defaultStudent.email;
     }
 
-    // Load Exams
+    // Load Quiz Progress
+    const savedQuizProgress = localStorage.getItem(`pieenear_quiz_progress_${email.toLowerCase()}`);
+    if (savedQuizProgress) {
+      setQuizProgress(JSON.parse(savedQuizProgress));
+    } else {
+      const initialProgress = { 1: false, 2: false, 3: false, 4: false };
+      localStorage.setItem(`pieenear_quiz_progress_${email.toLowerCase()}`, JSON.stringify(initialProgress));
+      setQuizProgress(initialProgress);
+    }
+
+    // Load & Seed Exams
     const storedExams = localStorage.getItem("pieenear_exams");
+    let needsSeeding = !storedExams;
     if (storedExams) {
+      try {
+        const parsed = JSON.parse(storedExams);
+        if (parsed.length === 0 || !parsed[0].course) {
+          needsSeeding = true;
+        }
+      } catch (e) {
+        needsSeeding = true;
+      }
+    }
+
+    if (!needsSeeding) {
       setExams(JSON.parse(storedExams));
+    } else {
+      const initialExams = [
+        {
+          id: "ex-web",
+          title: "Web Development Final Evaluation",
+          course: "Web Development",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which HTML5 semantic element is most suitable for site navigation links?", optionA: "section", optionB: "article", optionC: "nav", optionD: "aside", correctOption: "C", marks: 5 },
+            { text: "Which CSS property specifies a grid container layout?", optionA: "display: grid", optionB: "display: flex", optionC: "display: inline", optionD: "display: block", correctOption: "A", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-app",
+          title: "App Development Final Evaluation",
+          course: "App Development",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which architecture is optimized for single-codebase cross-platform mobile apps?", optionA: "Kotlin Native", optionB: "Swift Native", optionC: "Cross-Platform Framework", optionD: "Java VM", correctOption: "C", marks: 5 },
+            { text: "What is the default Flexbox layout direction in React Native?", optionA: "row", optionB: "column", optionC: "row-reverse", optionD: "column-reverse", correctOption: "B", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-uiux",
+          title: "UI/UX Design Certification Challenge",
+          course: "UI ux",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "What is the first fundamental phase of the Design Thinking framework?", optionA: "Ideate", optionB: "Define", optionC: "Empathize", optionD: "Prototype", correctOption: "C", marks: 5 },
+            { text: "Which Figma layout feature automatically handles dynamic padding and row flow?", optionA: "Smart Animate", optionB: "Auto-Layout", optionC: "Group grids", optionD: "Component states", correctOption: "B", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-aiml",
+          title: "AI/ML Basics Certification Exam",
+          course: "AI/ML basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which Python package is specialized for high-performance array and matrix mathematics?", optionA: "Matplotlib", optionB: "NumPy", optionC: "Pandas", optionD: "PyTorch", correctOption: "C", marks: 5 },
+            { text: "What clustering algorithm iteratively clusters data around distance centroids?", optionA: "K-Means", optionB: "Linear Regression", optionC: "Decision Tree", optionD: "SVM", correctOption: "A", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-sysdesign",
+          title: "System Design Basic Final Exam",
+          course: "System desgin basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "What is horizontal scaling in server architecture?", optionA: "Adding memory to a server", optionB: "Adding CPU capacity to a server", optionC: "Adding more server nodes to the pool", optionD: "Increasing DB cache sizes", correctOption: "C", marks: 5 },
+            { text: "According to CAP theorem, which property is traded off in a network partition failure?", optionA: "Caching", optionB: "Performance", optionC: "Consistency or Availability", optionD: "Consistency or Availability", correctOption: "C", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-pm",
+          title: "Product Management Evaluation Challenge",
+          course: "product mangement",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which PM canvas maps vision, cost structure, and channels on a single page?", optionA: "RICE metric", optionB: "PRD canvas", optionC: "Lean Canvas", optionD: "MoSCoW list", correctOption: "C", marks: 5 },
+            { text: "In feature prioritization, what does the R in RICE metric represent?", optionA: "Revenue", optionB: "Reach", optionC: "Retention", optionD: "Role", correctOption: "B", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-flutter",
+          title: "Flutter Development Basic Evaluation",
+          course: "Flutter development basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which Flutter widget is used to align items vertically?", optionA: "Row", optionB: "Column", optionC: "Scaffold", optionD: "Center", correctOption: "B", marks: 5 },
+            { text: "Which class acts as the notifyListeners sender inside Flutter Provider layouts?", optionA: "BuildContext", optionB: "Navigator", optionC: "ChangeNotifier", optionD: "Consumer", correctOption: "C", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-java",
+          title: "Java Basics Certification Exam",
+          course: "Java basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "What system executes Java bytecode dynamically?", optionA: "JDK Compiler", optionB: "JVM (Java Virtual Machine)", optionC: "System Kernel", optionD: "JRE Library", correctOption: "B", marks: 5 },
+            { text: "Which OOP access modifier restricts visibility solely inside the declaring class?", optionA: "private", optionB: "public", optionC: "protected", optionD: "default", correctOption: "A", marks: 5 }
+          ]
+        }
+      ];
+      localStorage.setItem("pieenear_exams", JSON.stringify(initialExams));
+      setExams(initialExams);
     }
 
     // Load Results
@@ -292,6 +434,35 @@ export default function StudentDashboard() {
     router.push("/login");
   };
 
+  const handleQuizSubmit = (weekNum, selectedOption, correctAnswer, explanation) => {
+    const isCorrect = selectedOption === correctAnswer;
+    
+    setQuizFeedback((prev) => ({
+      ...prev,
+      [weekNum]: {
+        isCorrect,
+        text: isCorrect 
+          ? `Correct! ${explanation}` 
+          : `Incorrect. Try again! Hint: ${explanation.split(".")[0]}.`
+      }
+    }));
+
+    if (isCorrect) {
+      const updatedProgress = {
+        ...quizProgress,
+        [weekNum]: true
+      };
+      setQuizProgress(updatedProgress);
+      localStorage.setItem(
+        `pieenear_quiz_progress_${studentInfo.email.toLowerCase()}`,
+        JSON.stringify(updatedProgress)
+      );
+      showToast(`Week ${weekNum} checkpoint completed successfully!`, "success");
+    } else {
+      showToast(`Incorrect answer for Week ${weekNum} quiz. Try again!`, "danger");
+    }
+  };
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -306,8 +477,12 @@ export default function StudentDashboard() {
   const myResults = results.filter(r => r.studentEmail.toLowerCase() === studentInfo.email.toLowerCase() && r.published);
   const myCertificates = certificates.filter(c => c.studentEmail.toLowerCase() === studentInfo.email.toLowerCase());
 
-  // Filter assigned exams (those that haven't been completed)
-  const myAvailableExams = exams.filter(ex => !results.some(r => r.examId === ex.id && r.studentEmail.toLowerCase() === studentInfo.email.toLowerCase()));
+  // Filter assigned exams (those that match the student's course and haven't been completed)
+  const studentCourse = studentInfo.course || "";
+  const myAvailableExams = exams.filter(ex => 
+    (ex.course || "").trim().toLowerCase() === studentCourse.trim().toLowerCase() &&
+    !results.some(r => r.examId === ex.id && r.studentEmail.toLowerCase() === studentInfo.email.toLowerCase())
+  );
 
   return (
     <div className="dashboard-layout">
@@ -337,7 +512,7 @@ export default function StudentDashboard() {
           </button>
           <div className="mobile-header-brand">
             <span style={styles.logoIcon}>P</span>
-            <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "#fff" }}>Pieenear</span>
+            <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--text-primary)" }}>Pieenear</span>
           </div>
           <div style={{ width: "22px" }}></div>
         </div>
@@ -408,7 +583,7 @@ export default function StudentDashboard() {
               }}
               onClick={() => { setActiveTab("profile"); setSidebarOpen(false); }}
             >
-              ⚙️ Security Profile
+              ⚙️ Settings & Profile
             </button>
           </nav>
 
@@ -454,7 +629,7 @@ export default function StudentDashboard() {
                   <span>MARKS: {activeExam.questions[currentQIdx].marks}</span>
                 </div>
 
-                <h2 style={{ fontSize: "1.35rem", fontWeight: 700, marginTop: "20px", color: "#fff", lineHeight: 1.5 }}>
+                <h2 style={{ fontSize: "1.35rem", fontWeight: 700, marginTop: "20px", color: "var(--text-primary)", lineHeight: 1.5 }}>
                   {activeExam.questions[currentQIdx].text}
                 </h2>
 
@@ -490,7 +665,7 @@ export default function StudentDashboard() {
                     type="button"
                     onClick={toggleMarkForReview}
                     className="btn btn-secondary"
-                    style={{ borderColor: markedQuestions.has(currentQIdx) ? "#f59e0b" : "var(--border-color)", color: markedQuestions.has(currentQIdx) ? "#f59e0b" : "#fff" }}
+                    style={{ borderColor: markedQuestions.has(currentQIdx) ? "#f59e0b" : "var(--border-color)", color: markedQuestions.has(currentQIdx) ? "#f59e0b" : "var(--text-primary)" }}
                   >
                     🔖 {markedQuestions.has(currentQIdx) ? "Marked for Review" : "Mark for Review"}
                   </button>
@@ -618,7 +793,7 @@ export default function StudentDashboard() {
                   {activeTab === "exams" && "Exams Workspace"}
                   {activeTab === "certificates" && "Certificates Vault"}
                   {activeTab === "doubt" && "Doubt Desk"}
-                  {activeTab === "profile" && "Security Console"}
+                  {activeTab === "profile" && "Settings & Profile"}
                 </h1>
                 <p style={styles.subtitleText}>Track curriculum progress, complete evaluations, and claim credentials.</p>
               </div>
@@ -627,81 +802,243 @@ export default function StudentDashboard() {
             {/* TAB CONTROLS */}
 
             {/* STUDY DESK */}
-            {activeTab === "desk" && (
-              <div className="animate-fade-in" style={styles.section}>
-                {/* Welcome Card */}
-                <div className="glass-panel" style={styles.welcomeBanner}>
-                  <div>
-                    <h2 style={{ fontSize: "1.8rem", fontWeight: 800, marginBottom: "8px" }}>
-                      Welcome back, <span className="gradient-text">{studentInfo.name}</span>!
-                    </h2>
-                    <p style={{ color: "var(--text-secondary)", maxWidth: "550px", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      Access your assigned tests, submit doubt questions, and claim graduation certificates when completing evaluations.
-                    </p>
-                  </div>
-                  <div style={styles.progressGaugeCard}>
-                    <div style={styles.gaugeContainer}>
-                      <svg width="80" height="80" viewBox="0 0 36 36" style={styles.svgWheel}>
-                        <path style={styles.wheelTrack} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                        <path
-                          style={{
-                            ...styles.wheelFill,
-                            strokeDasharray: `${myResults.filter(r => r.status === "Pass").length > 0 ? "100" : "40"}, 100`,
-                            stroke: "var(--accent-primary)"
-                          }}
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        />
-                      </svg>
-                      <div style={styles.gaugeText}>
-                        {myResults.filter(r => r.status === "Pass").length > 0 ? "100%" : "40%"}
+            {activeTab === "desk" && (() => {
+              const currentCourse = courseData[studentInfo.course] || courseData["Web Development"];
+              const completedCount = Object.values(quizProgress).filter(Boolean).length;
+              const quizPercentage = Math.round((completedCount / 4) * 100);
+
+              return (
+                <div className="animate-fade-in" style={styles.section}>
+                  {/* Welcome Card */}
+                  <div className="glass-panel" style={styles.welcomeBanner}>
+                    <div>
+                      <h2 style={{ fontSize: "1.8rem", fontWeight: 800, marginBottom: "8px" }}>
+                        Welcome back, <span className="gradient-text">{studentInfo.name}</span>!
+                      </h2>
+                      <p style={{ color: "var(--text-secondary)", maxWidth: "550px", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                        Track your 1-month certification curriculum, complete weekly quizzes, and review your assigned study notes.
+                      </p>
+                    </div>
+                    <div style={styles.progressGaugeCard}>
+                      <div style={styles.gaugeContainer}>
+                        <svg width="80" height="80" viewBox="0 0 36 36" style={styles.svgWheel}>
+                          <path style={styles.wheelTrack} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                          <path
+                            style={{
+                              ...styles.wheelFill,
+                              strokeDasharray: `${quizPercentage}, 100`,
+                              stroke: "var(--accent-primary)"
+                            }}
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                        </svg>
+                        <div style={styles.gaugeText}>
+                          {quizPercentage}%
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                          {myResults.some(r => r.status === "Pass") ? "Graduated" : "In Progress"}
+                        </p>
+                        <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Syllabus progress</p>
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ fontWeight: 700, fontSize: "1.1rem" }}>Academic Grade</p>
-                      <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Syllabus status</p>
+                  </div>
+
+                  <div className="desk-grid">
+                    {/* 4-Week Interactive Roadmap */}
+                    <div className="glass-panel" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                      <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "5px" }}>
+                        🗓️ 4-Week Interactive Roadmap
+                      </h3>
+                      <div>
+                        {currentCourse.weeks.map((wk) => {
+                          const isCompleted = quizProgress[wk.week];
+                          const isExpanded = expandedWeek === wk.week;
+                          const feedback = quizFeedback[wk.week];
+                          const selectedOption = selectedQuizOption[wk.week];
+
+                          return (
+                            <div key={wk.week} style={styles.accordionItem}>
+                              <div 
+                                style={{
+                                  ...styles.accordionHeader,
+                                  ...(isExpanded ? styles.accordionHeaderExpanded : {})
+                                }}
+                                onClick={() => setExpandedWeek(isExpanded ? null : wk.week)}
+                              >
+                                <span style={styles.accordionTitle}>
+                                  {isCompleted ? "✅" : "📖"} {wk.title}
+                                </span>
+                                <span style={isCompleted ? styles.weekCompletedBadge : styles.weekPendingBadge}>
+                                  {isCompleted ? "Completed" : "In Progress"}
+                                </span>
+                              </div>
+                              {isExpanded && (
+                                <div style={styles.accordionContent}>
+                                  <div>
+                                    <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>🔑 Key Concepts</h4>
+                                    <ul style={{ paddingLeft: "20px", color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: "1.6" }}>
+                                      {wk.topics.map((t, idx) => (
+                                        <li key={idx} style={{ marginBottom: "4px" }}>{t}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  
+                                  <div>
+                                    <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-primary)", marginBottom: "8px" }}>📚 Study Notes</h4>
+                                    <div style={styles.readingContainer}>
+                                      {wk.readings}
+                                    </div>
+                                  </div>
+
+                                  {/* Weekly Concept Review Quiz */}
+                                  <div style={styles.quizSection}>
+                                    <h4 style={styles.quizQuestion}>📝 Week {wk.week} Review Checkpoint</h4>
+                                    <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "12px" }}>
+                                      {wk.quiz.question}
+                                    </p>
+                                    <div style={styles.quizOptionsGrid}>
+                                      {wk.quiz.options.map((opt) => {
+                                        const isSelected = selectedOption === opt;
+                                        let optionStyle = { ...styles.quizOptionBtn };
+                                        
+                                        if (isSelected) {
+                                          optionStyle = { ...optionStyle, ...styles.quizOptionBtnSelected };
+                                        }
+                                        if (isCompleted && opt === wk.quiz.answer) {
+                                          optionStyle = { ...optionStyle, ...styles.quizOptionBtnCorrect };
+                                        } else if (isCompleted && isSelected && opt !== wk.quiz.answer) {
+                                          optionStyle = { ...optionStyle, ...styles.quizOptionBtnIncorrect };
+                                        } else if (feedback && isSelected) {
+                                          if (feedback.isCorrect) {
+                                            optionStyle = { ...optionStyle, ...styles.quizOptionBtnCorrect };
+                                          } else {
+                                            optionStyle = { ...optionStyle, ...styles.quizOptionBtnIncorrect };
+                                          }
+                                        }
+
+                                        return (
+                                          <button
+                                            key={opt}
+                                            type="button"
+                                            disabled={isCompleted}
+                                            style={optionStyle}
+                                            onClick={() => setSelectedQuizOption({
+                                              ...selectedQuizOption,
+                                              [wk.week]: opt
+                                            })}
+                                          >
+                                            {opt}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {!isCompleted && selectedOption && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        style={{ width: "100%", padding: "10px", fontSize: "0.9rem" }}
+                                        onClick={() => handleQuizSubmit(wk.week, selectedOption, wk.quiz.answer, wk.quiz.explanation)}
+                                      >
+                                        Submit Answer Check
+                                      </button>
+                                    )}
+
+                                    {isCompleted && (
+                                      <div style={{ ...styles.quizFeedbackAlert, ...styles.quizFeedbackCorrect }}>
+                                        ✨ <strong>Completed:</strong> You successfully passed this week's checkpoint.
+                                        <p style={{ marginTop: "4px", fontSize: "0.85rem", opacity: 0.9 }}>
+                                          {wk.quiz.explanation}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    {!isCompleted && feedback && !feedback.isCorrect && (
+                                      <div style={{ ...styles.quizFeedbackAlert, ...styles.quizFeedbackIncorrect }}>
+                                        ⚠️ {feedback.text}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Right Sidebar Info Cards */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                      {/* Program Details Card */}
+                      <div className="glass-panel" style={styles.announcementCard}>
+                        <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📋 Program Details</h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <span style={{ fontSize: "0.8rem", color: "var(--accent-cyan)", fontWeight: 700 }}>ASSIGNED COURSE</span>
+                          <h4 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--text-primary)" }}>{studentInfo.course}</h4>
+                          <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: "1.4", marginTop: "4px" }}>
+                            {currentCourse.tagline}
+                          </p>
+                          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "12px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "4px" }}>
+                              <span style={{ color: "var(--text-muted)" }}>Syllabus Completed</span>
+                              <strong style={{ color: "var(--accent-emerald)" }}>{completedCount} of 4 Weeks</strong>
+                            </div>
+                            <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", overflow: "hidden" }}>
+                              <div 
+                                style={{ 
+                                  width: `${(completedCount / 4) * 100}%`, 
+                                  height: "100%", 
+                                  background: "linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-cyan) 100%)",
+                                  transition: "width 0.3s ease"
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fast Summary */}
+                      <div className="glass-panel" style={styles.scheduleCard}>
+                        <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📊 Fast Summary</h3>
+                        <div style={styles.statLogItem}>
+                          <span>Assigned Available Tests</span>
+                          <strong>{myAvailableExams.length}</strong>
+                        </div>
+                        <div style={styles.statLogItem}>
+                          <span>Evaluations Completed</span>
+                          <strong>{myResults.length}</strong>
+                        </div>
+                        <div style={styles.statLogItem}>
+                          <span>Earned Certificates</span>
+                          <strong>{myCertificates.length}</strong>
+                        </div>
+                      </div>
+
+                      {/* Announcements */}
+                      <div className="glass-panel" style={styles.announcementCard}>
+                        <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📢 Announcements</h3>
+                        <div style={styles.announcementItem}>
+                          <span style={styles.announcementBadge}>Platform Upgrade</span>
+                          <p style={styles.announcementText}>
+                            <strong>Secure Exam Runner active:</strong> The static evaluation workspace is fully functional. Please do not close windows during tests.
+                          </p>
+                          <span style={styles.announcementDate}>Active</span>
+                        </div>
+                        <div style={{ ...styles.announcementItem, borderBottom: "none" }}>
+                          <span style={{ ...styles.announcementBadge, background: "rgba(168,85,247,0.15)", color: "var(--accent-secondary)" }}>Certificates</span>
+                          <p style={styles.announcementText}>
+                            Pass evaluations with score grade above 70% to instantly claim achievement diplomas in the Certificate vault.
+                          </p>
+                          <span style={styles.announcementDate}>Active</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                <div className="desk-grid">
-                  {/* Notices board */}
-                  <div className="glass-panel" style={styles.announcementCard}>
-                    <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📢 Announcements</h3>
-                    <div style={styles.announcementItem}>
-                      <span style={styles.announcementBadge}>Platform Upgrade</span>
-                      <p style={styles.announcementText}>
-                        <strong>Secure Exam Runner active:</strong> The static evaluation workspace is fully functional. Please do not close windows during tests.
-                      </p>
-                      <span style={styles.announcementDate}>Active</span>
-                    </div>
-                    <div style={{ ...styles.announcementItem, borderBottom: "none" }}>
-                      <span style={{ ...styles.announcementBadge, background: "rgba(168,85,247,0.15)", color: "var(--accent-secondary)" }}>Certificates</span>
-                      <p style={styles.announcementText}>
-                        Pass evaluations with score grade above 70% to instantly claim achievement diplomas in the Certificate vault.
-                      </p>
-                      <span style={styles.announcementDate}>Active</span>
-                    </div>
-                  </div>
-
-                  {/* Quick stats */}
-                  <div className="glass-panel" style={styles.scheduleCard}>
-                    <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📊 Fast Summary</h3>
-                    <div style={styles.statLogItem}>
-                      <span>Assigned Available Tests</span>
-                      <strong>{myAvailableExams.length}</strong>
-                    </div>
-                    <div style={styles.statLogItem}>
-                      <span>Evaluations Completed</span>
-                      <strong>{myResults.length}</strong>
-                    </div>
-                    <div style={styles.statLogItem}>
-                      <span>Earned Certificates</span>
-                      <strong>{myCertificates.length}</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* EXAMS WORKSPACE */}
             {activeTab === "exams" && (
@@ -716,7 +1053,7 @@ export default function StudentDashboard() {
                     <div style={styles.grid}>
                       {myAvailableExams.map((ex) => (
                         <div key={ex.id} className="glass-panel glass-panel-hover" style={styles.examSelectionCard}>
-                          <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#fff" }}>{ex.title}</h4>
+                          <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)" }}>{ex.title}</h4>
                           <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "6px" }}>
                             ⏱️ Duration: <strong>{ex.duration} Mins</strong>
                           </p>
@@ -880,7 +1217,7 @@ export default function StudentDashboard() {
                         {t.reply && (
                           <div style={styles.ticketReplyBox}>
                             <p style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--accent-primary)", marginBottom: "4px" }}>📨 Instructor Response:</p>
-                            <p style={{ fontSize: "0.85rem", color: "#fff" }}>{t.reply}</p>
+                            <p style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>{t.reply}</p>
                           </div>
                         )}
                       </div>
@@ -906,6 +1243,25 @@ export default function StudentDashboard() {
                   <div style={styles.profileDetailGroup}>
                     <span style={styles.profileDetailLabel}>Batch Curriculum</span>
                     <p style={styles.profileDetailVal}>{studentInfo.course}</p>
+                  </div>
+                  <div style={{ ...styles.profileDetailGroup, borderBottom: "none", paddingBottom: 0 }}>
+                    <span style={styles.profileDetailLabel}>Display Theme Mode</span>
+                    <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                      <button
+                        onClick={() => handleThemeChange("light")}
+                        className={`btn ${theme === "light" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ flex: 1, padding: "8px 12px", fontSize: "0.85rem" }}
+                      >
+                        ☀️ Light Mode (Default)
+                      </button>
+                      <button
+                        onClick={() => handleThemeChange("dark")}
+                        className={`btn ${theme === "dark" ? "btn-primary" : "btn-secondary"}`}
+                        style={{ flex: 1, padding: "8px 12px", fontSize: "0.85rem" }}
+                      >
+                        🌙 Dark Mode
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1044,7 +1400,7 @@ const styles = {
     fontWeight: 600,
     background: "rgba(99, 102, 241, 0.1)",
     border: "1px solid rgba(99, 102, 241, 0.2)",
-    color: "#a5b4fc",
+    color: "var(--accent-primary)",
     padding: "6px 14px",
     borderRadius: "20px",
   },
@@ -1068,7 +1424,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    background: "linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(31, 41, 55, 0.5) 100%)",
+    background: "var(--bg-card)",
   },
   progressGaugeCard: {
     display: "flex",
@@ -1090,7 +1446,7 @@ const styles = {
   },
   wheelTrack: {
     fill: "none",
-    stroke: "rgba(255,255,255,0.05)",
+    stroke: "var(--border-color)",
     strokeWidth: 3.2,
   },
   wheelFill: {
@@ -1103,7 +1459,7 @@ const styles = {
     position: "absolute",
     fontSize: "0.95rem",
     fontWeight: 700,
-    color: "#fff",
+    color: "var(--text-primary)",
   },
   deskGrid: {
     display: "grid",
@@ -1200,7 +1556,7 @@ const styles = {
     padding: "4px 10px",
     background: "rgba(99, 102, 241, 0.08)",
     border: "1px solid rgba(99, 102, 241, 0.15)",
-    color: "#a5b4fc",
+    color: "var(--accent-primary)",
     borderRadius: "4px",
     fontWeight: 500,
   },
@@ -1268,7 +1624,7 @@ const styles = {
   ticketSubjectText: {
     fontSize: "0.95rem",
     fontWeight: 700,
-    color: "#fff",
+    color: "var(--text-primary)",
     marginBottom: "4px",
   },
   ticketCategoryTag: {
@@ -1305,7 +1661,7 @@ const styles = {
   profileDetailVal: {
     fontSize: "1.05rem",
     fontWeight: 600,
-    color: "#fff",
+    color: "var(--text-primary)",
   },
   legendBox: {
     display: "inline-block",
@@ -1338,5 +1694,684 @@ const styles = {
     alignItems: "center",
     boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
     animation: "fadeIn 0.25s ease-out",
+  },
+  accordionItem: {
+    background: "rgba(255,255,255,0.02)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--border-radius-md)",
+    marginBottom: "16px",
+    overflow: "hidden",
+    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+  },
+  accordionHeader: {
+    padding: "18px 24px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    cursor: "pointer",
+    background: "rgba(255,255,255,0.01)",
+    borderBottom: "1px solid transparent",
+    transition: "background 0.2s ease",
+  },
+  accordionHeaderExpanded: {
+    background: "rgba(99, 102, 241, 0.05)",
+    borderBottom: "1px solid var(--border-color)",
+  },
+  accordionTitle: {
+    fontSize: "1.05rem",
+    fontWeight: 700,
+    color: "var(--text-primary)",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  },
+  weekCompletedBadge: {
+    fontSize: "0.75rem",
+    padding: "3px 8px",
+    borderRadius: "20px",
+    background: "rgba(16, 185, 129, 0.15)",
+    color: "var(--accent-emerald)",
+    fontWeight: 600,
+  },
+  weekPendingBadge: {
+    fontSize: "0.75rem",
+    padding: "3px 8px",
+    borderRadius: "20px",
+    background: "rgba(255,255,255,0.05)",
+    color: "var(--text-muted)",
+    fontWeight: 600,
+  },
+  accordionContent: {
+    padding: "24px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "20px",
+  },
+  readingContainer: {
+    background: "rgba(255, 255, 255, 0.01)",
+    border: "1px dashed var(--border-color)",
+    borderRadius: "var(--border-radius-md)",
+    padding: "16px",
+    fontSize: "0.92rem",
+    lineHeight: "1.6",
+    color: "var(--text-secondary)",
+  },
+  quizSection: {
+    background: "rgba(99, 102, 241, 0.03)",
+    border: "1px solid rgba(99, 102, 241, 0.1)",
+    borderRadius: "var(--border-radius-md)",
+    padding: "20px",
+  },
+  quizQuestion: {
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: "var(--text-primary)",
+    marginBottom: "16px",
+  },
+  quizOptionsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+    marginBottom: "16px",
+  },
+  quizOptionBtn: {
+    padding: "12px 16px",
+    borderRadius: "var(--border-radius-md)",
+    border: "1px solid var(--border-color)",
+    background: "rgba(255,255,255,0.02)",
+    color: "var(--text-secondary)",
+    fontSize: "0.88rem",
+    fontWeight: 600,
+    textAlign: "left",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    outline: "none",
+  },
+  quizOptionBtnSelected: {
+    borderColor: "var(--accent-primary)",
+    background: "rgba(99, 102, 241, 0.1)",
+    color: "var(--text-primary)",
+  },
+  quizOptionBtnCorrect: {
+    borderColor: "rgba(16, 185, 129, 0.4)",
+    background: "rgba(16, 185, 129, 0.1)",
+    color: "var(--accent-emerald)",
+  },
+  quizOptionBtnIncorrect: {
+    borderColor: "rgba(244, 63, 94, 0.4)",
+    background: "rgba(244, 63, 94, 0.1)",
+    color: "var(--accent-rose)",
+  },
+  quizFeedbackAlert: {
+    padding: "14px 16px",
+    borderRadius: "var(--border-radius-md)",
+    fontSize: "0.9rem",
+    lineHeight: "1.5",
+    marginTop: "12px",
+  },
+  quizFeedbackCorrect: {
+    background: "rgba(16, 185, 129, 0.1)",
+    border: "1px solid rgba(16, 185, 129, 0.2)",
+    color: "var(--accent-emerald)",
+  },
+  quizFeedbackIncorrect: {
+    background: "rgba(244, 63, 94, 0.1)",
+    border: "1px solid rgba(244, 63, 94, 0.2)",
+    color: "var(--accent-rose)",
+  }
+};
+
+const courseData = {
+  "Web Development": {
+    tagline: "Master modern full-stack web engineering, from layout design to interactive client-side routing and performance optimization.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Semantic HTML5, CSS Flexbox & CSS Grid",
+        topics: [
+          "HTML5 semantic structure elements (header, footer, nav, article, section)",
+          "Flexbox 1D layout alignments, justification, and dynamic wraps",
+          "Grid 2D layouts using templates, areas, autofill, and grid gaps"
+        ],
+        readings: "Web page structures rely on semantic HTML5 tags for accessibility and SEO. For layout flow, use Flexbox when aligning items along a single axis (row or column). Use CSS Grid when creating complex multi-dimensional page structures. Avoid legacy floats and tables for general layout design.",
+        quiz: {
+          question: "Which HTML5 semantic element is most suitable for containing site navigation links?",
+          options: ["<section>", "<article>", "<nav>", "<aside>"],
+          answer: "<nav>",
+          explanation: "The <nav> element is designed specifically for primary navigation links, enhancing accessibility and SEO indexing."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: Advanced JavaScript (ES6+), DOM Controls & Events",
+        topics: [
+          "Block scoped variables (let, const) and arrow functions",
+          "Array methods (.map(), .filter(), .reduce())",
+          "Asynchronous flow using Promises, async/await, and Fetch API"
+        ],
+        readings: "Modern JavaScript uses ES6 features like block scoping, arrow functions, and array helper functions. Use filter() to build arrays matching conditions, and map() to transform values. Wrap network requests in async/await blocks to gracefully handle success and failures.",
+        quiz: {
+          question: "Which array method creates a new array with all elements that pass the test implemented by the provided function?",
+          options: [".map()", ".filter()", ".reduce()", ".forEach()"],
+          answer: ".filter()",
+          explanation: "The .filter() method executes a test callback on each element and returns a new array containing only the elements that returned true."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: React.js Component Architecture & Hooks",
+        topics: [
+          "JSX elements, props validation, and state reactivity",
+          "Component lifecycle mapping using useState and useEffect hooks",
+          "Lifting state up and handling user input forms"
+        ],
+        readings: "React builds user interfaces by combining reusable component pieces. State represents internal component memory, managed via useState. Use useEffect to synchronize your components with external systems, like APIs, tracking state changes via the dependency array.",
+        quiz: {
+          question: "Which hook is used to perform side effects, such as API fetching or page subscriptions, in React functional components?",
+          options: ["useState", "useContext", "useEffect", "useRef"],
+          answer: "useEffect",
+          explanation: "The useEffect hook lets you run side-effects after rendering, like data fetching, manual DOM updates, or setting up intervals."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: Production Deployment & Performance Tuning",
+        topics: [
+          "Next.js build compilation and static site generation",
+          "Enabling CORS headers and securing API endpoints",
+          "Image optimizations and component lazy loading"
+        ],
+        readings: "Before shipping web apps, compile source code into optimal bundles. Use Next.js optimizations like next/image and code-splitting (lazy loading) to speed up initial loads. Secure your backend routes by properly restricting Cross-Origin Resource Sharing (CORS) access headers.",
+        quiz: {
+          question: "Which HTTP header is typically used to enable Cross-Origin Resource Sharing (CORS)?",
+          options: ["Access-Control-Allow-Origin", "Content-Security-Policy", "X-Frame-Options", "Strict-Transport-Security"],
+          answer: "Access-Control-Allow-Origin",
+          explanation: "The Access-Control-Allow-Origin header is returned by servers to allow browsers to access resources from authorized origin domains."
+        }
+      }
+    ]
+  },
+  "App Development": {
+    tagline: "Build native and cross-platform mobile applications for iOS and Android with modern user experience principles.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Mobile Ecosystems & Native Architectures",
+        topics: [
+          "Android Runtime (ART) vs iOS Cocoa Touch system layers",
+          "Native development (Kotlin/Swift) vs Cross-Platform hybrid approaches",
+          "Mobile design considerations: battery life, background threads, and offline sync"
+        ],
+        readings: "Mobile operating systems prioritize energy efficiency and resource constraints. Swift and Kotlin provide high-performance native binaries for iOS and Android. Cross-platform frameworks translate single codebases into native layouts. Always delegate long-running tasks off the main UI thread.",
+        quiz: {
+          question: "Which operating system uses Cocoa Touch framework as its core user interface framework?",
+          options: ["Android", "iOS", "Windows Phone", "Tizen"],
+          answer: "iOS",
+          explanation: "Cocoa Touch is the application development framework for building user interfaces on Apple's iOS device line."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: React Native Core Widgets & Flexbox Layouts",
+        topics: [
+          "Core elements: View, Text, Image, and TextInput",
+          "Custom stylesheet styling constraints and layout engines",
+          "Dynamic scrolling lists using ScrollView vs FlatList components"
+        ],
+        readings: "React Native translates React components into native mobile views. Unlike web browsers, mobile styling uses a subset of Flexbox where the default layout direction is column. For long lists, always prefer FlatList as it recycles view cells to prevent high memory usage.",
+        quiz: {
+          question: "What component is used in React Native to scroll a generic list of items efficiently without loading the entire list into memory?",
+          options: ["ScrollView", "FlatList", "ListView", "SectionList"],
+          answer: "FlatList",
+          explanation: "FlatList renders items lazily, creating UI rows only as they become visible on screen to conserve device RAM."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: State Management & Mobile App Navigation",
+        topics: [
+          "React Navigation architecture (Stack, Tabs, and Drawer navigators)",
+          "Passing parameters across routing screens and navigation trees",
+          "Global state patterns inside mobile sandboxes"
+        ],
+        readings: "Navigation in mobile apps resembles stack-based transitions. Use StackNavigator to push screens onto a history list, TabNavigator for persistent bottom bar tabs, and DrawerNavigator for slide-out menus. Keep navigation payloads clean of large data structures.",
+        quiz: {
+          question: "Which navigator in React Navigation is typically used for a drawer slide-out menu?",
+          options: ["StackNavigator", "TabNavigator", "DrawerNavigator", "SwitchNavigator"],
+          answer: "DrawerNavigator",
+          explanation: "DrawerNavigator generates a menu drawer that slides in from the side of the screen when swiped or triggered."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: Deployment, Code Signing & App Store Publishing",
+        topics: [
+          "Configuring Info.plist (iOS) and AndroidManifest.xml details",
+          "Certificates, provisioning profiles, and code signing steps",
+          "Over-the-Air (OTA) updates and app store bundle releases"
+        ],
+        readings: "Publishing mobile apps requires strict code verification. Configure AndroidManifest.xml for permissions and Info.plist for iOS capabilities. Register certificates and signing credentials with Google and Apple before building APK/IPA bundles.",
+        quiz: {
+          question: "Which configuration file in iOS apps contains metadata like bundle identifiers and required device permissions?",
+          options: ["AndroidManifest.xml", "App.js", "Info.plist", "build.gradle"],
+          answer: "Info.plist",
+          explanation: "Info.plist (Information Property List) is a structured key-value XML file containing foundational configurations for iOS apps."
+        }
+      }
+    ]
+  },
+  "UI ux": {
+    tagline: "Understand user-centric design methodologies, wireframing tools, typography systems, and prototyping methods.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Fundamentals of Design Thinking (Empathize & Define)",
+        topics: [
+          "The 5 steps of Design Thinking (Empathize, Define, Ideate, Prototype, Test)",
+          "Building user personas, journey mapping, and empathy tables",
+          "Formulating clear, user-focused problem statements"
+        ],
+        readings: "User Experience (UX) design is grounded in empathy. The Design Thinking process starts with understanding user pain points directly through observation and interviews. In the Define phase, designers compile research findings into structured target personas and actionable problem statements.",
+        quiz: {
+          question: "What is the primary goal of the Empathize phase in the Design Thinking framework?",
+          options: ["Create rapid physical models", "Observe and understand user feelings and needs", "Define the core problem statement", "Test final designs with users"],
+          answer: "Observe and understand user feelings and needs",
+          explanation: "Empathize focuses on researching user needs, observing habits, and understanding motivations without assuming pre-conceived biases."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: Wireframing Layouts & Figma Tool Basics",
+        topics: [
+          "Low-fidelity sketches vs high-fidelity digital mockups",
+          "Figma basics: frames, shapes, boolean operations, and groups",
+          "Designing layouts dynamically using Figma Auto-Layout"
+        ],
+        readings: "Figma is the industry-standard collaborative vector design tool. Begin layouts with low-fidelity sketches before adding color or styles. In Figma, use Auto Layout to make elements responsive. Auto Layout dynamically shifts alignments when component sizes or text contents change.",
+        quiz: {
+          question: "Which Figma layout feature automatically handles dynamic padding and row flow when text labels resize?",
+          options: ["Smart Animate", "Auto Layout", "Component Sets", "Interactive Components"],
+          answer: "Auto Layout",
+          explanation: "Auto Layout is a property you can add to frames that lets you create designs that grow or shrink dynamically."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: Color Theory, Visual Hierarchy & Typography Systems",
+        topics: [
+          "Color palettes (Monochromatic, Analogous, Complementary) and meanings",
+          "Visual contrast guidelines, alignment grids, and spacing systems",
+          "Selecting and pairing font families for web and mobile platforms"
+        ],
+        readings: "Visual design guides a user's attention through a interface. Establish clear visual hierarchies using size contrast, weights, and color accents. Ensure color combinations meet accessibility contrast scores (WCAG) so text remains readable to all user demographics.",
+        quiz: {
+          question: "Which type of color palette uses colors that are adjacent to each other on the standard color wheel?",
+          options: ["Monochromatic", "Analogous", "Complementary", "Triadic"],
+          answer: "Analogous",
+          explanation: "Analogous color schemes use colors that sit next to each other on the color wheel, creating natural, harmonious layouts."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: Interactive Prototyping & Usability Evaluation",
+        topics: [
+          "Setting up interactive connections and animated state triggers",
+          "Running usability testing, session logs, and observing user blockages",
+          "Evaluating interfaces against Nielsen's 10 Usability Heuristics"
+        ],
+        readings: "Validate design assumptions before writing production code. Create interactive prototypes in Figma by linking button hotspots to target screens. Test prototype designs with actual users. Run heuristic evaluations to check for clear user feedback, undo controls, and consistency.",
+        quiz: {
+          question: "What is the primary purpose of conducting a design heuristic evaluation?",
+          options: ["Write CSS styling tokens", "Evaluate UI against established usability principles", "Conduct user surveys", "Run A/B code deployments"],
+          answer: "Evaluate UI against established usability principles",
+          explanation: "Heuristic evaluation checks an interface design against a list of recognized usability guidelines, like system visibility and error prevention."
+        }
+      }
+    ]
+  },
+  "AI/ML basic": {
+    tagline: "Explore data processing libraries, core supervised algorithms, unsupervised clustering, and neural network foundations.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Mathematical Foundations & Python Libraries",
+        topics: [
+          "Linear algebra, probability vectors, and matrix dimensions",
+          "NumPy arrays, slicing, broadcasting, and matrix operations",
+          "Pandas DataFrames: data cleaning, indexing, and aggregations"
+        ],
+        readings: "Artificial Intelligence relies on linear algebra, statistics, and programming. Python serves as the primary language due to its specialized library ecosystems. Use NumPy for high-performance matrix math, and Pandas to read, clean, and manipulate tabular data files.",
+        quiz: {
+          question: "Which library is primary used for data analysis and structures like DataFrames in Python?",
+          options: ["NumPy", "Pandas", "Matplotlib", "Scikit-Learn"],
+          answer: "Pandas",
+          explanation: "Pandas provides high-level data structures and manipulation functions designed to make data cleaning and analysis quick and easy."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: Supervised Learning (Regression & Trees)",
+        topics: [
+          "Linear regression formulas, cost functions, and Gradient Descent",
+          "Classification models: Logistic Regression and Decision Trees",
+          "Splitting datasets into training, validation, and test sections"
+        ],
+        readings: "Supervised learning models learn mappings from labeled inputs. Linear regression fits a line to continuous data by minimizing error margins. Decision Trees split data points sequentially based on descriptive features. Evaluate models by keeping test data separate.",
+        quiz: {
+          question: "In linear regression, what metric measures the proportion of variance in the dependent variable predictable from the independent variable?",
+          options: ["Mean Absolute Error", "R-squared", "Silhouette Score", "Gini Impurity"],
+          answer: "R-squared",
+          explanation: "R-squared (coefficient of determination) measures how well the regression model fits the variance in the target dataset."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: Unsupervised Learning (Clustering & Dimensionality)",
+        topics: [
+          "K-Means Clustering: centroids, distances, and selecting K",
+          "Dimensionality reduction with Principal Component Analysis (PCA)",
+          "Anomaly detection models and feature engineering methods"
+        ],
+        readings: "Unsupervised learning works on unlabeled datasets to find hidden patterns. K-Means groups data points around calculated centers. Principal Component Analysis (PCA) reduces the number of dimensions in large datasets while retaining maximum variance.",
+        quiz: {
+          question: "What is the primary purpose of Principal Component Analysis (PCA) in machine learning?",
+          options: ["Supervised Classification", "Dimensionality Reduction", "Clustering Outliers", "Hyperparameter Tuning"],
+          answer: "Dimensionality Reduction",
+          explanation: "PCA simplifies highly dimensional datasets into fewer main components, reducing computation costs while keeping essential patterns."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: Artificial Neural Networks & Deep Learning",
+        topics: [
+          "Perceptron architectures, weights, biases, and active layers",
+          "Activation functions: Sigmoid, Hyperbolic Tangent (Tanh), and ReLU",
+          "Backpropagation, loss optimizers, and neural training iterations"
+        ],
+        readings: "Deep learning models are built from stacked layer channels. A single node calculates weighted inputs, adds a bias, and passes the result through an activation function. Use Sigmoid for outputs representing probabilities, and ReLU for hidden layers to speed up gradient calculations.",
+        quiz: {
+          question: "Which activation function outputs values in the range [0, 1] and is commonly used for binary classification?",
+          options: ["ReLU", "Sigmoid", "Tanh", "Softmax"],
+          answer: "Sigmoid",
+          explanation: "The Sigmoid activation function maps any real-valued number into a value between 0 and 1, making it perfect for outputting probabilities."
+        }
+      }
+    ]
+  },
+  "System desgin basic": {
+    tagline: "Learn scaling models, load balancing, caching systems, database schemas, and message queues in backend engineering.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Scaling Principles & Server Architectures",
+        topics: [
+          "Vertical scaling (scaling up) vs Horizontal scaling (scaling out)",
+          "Designing stateful vs stateless application microservices",
+          "System characteristics: availability, throughput, and latencies"
+        ],
+        readings: "System design coordinates multiple compute instances. Vertical scaling adds CPU/RAM to one machine, reaching hardware limits. Horizontal scaling adds more machines, calling for stateless architectures where any node can process incoming requests.",
+        quiz: {
+          question: "What is horizontal scaling (scaling out)?",
+          options: ["Adding CPU and RAM resources to a single node", "Adding more server nodes to run in parallel", "Refactoring monolithic code into smaller functions", "Setting up a content delivery network"],
+          answer: "Adding more server nodes to run in parallel",
+          explanation: "Horizontal scaling scales out capacity by connecting multiple servers to a network pool, providing elastic availability."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: Load Balancing, Caches & CDN Deliveries",
+        topics: [
+          "Load balancers: Nginx, round-robin routes, and sticky sessions",
+          "Caching strategies (write-through, cache-aside) using Redis",
+          "Content Delivery Networks (CDNs) for static edge distribution"
+        ],
+        readings: "Speed up response cycles using caches. Load balancers distribute requests across servers to prevent bottlenecks. Use Redis as a cache-aside database layer for hot records. Distribute static assets globally at edge nodes using CDNs.",
+        quiz: {
+          question: "Which load balancing algorithm selects servers based on sequential distribution order?",
+          options: ["Least Connections", "IP Hash", "Round Robin", "Weighted Least Connections"],
+          answer: "Round Robin",
+          explanation: "Round Robin distributes incoming traffic in circular order, sending the next request to the next server in line."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: Databases, Sharding, Replication & CAP Theorem",
+        topics: [
+          "SQL vs NoSQL: schemas, indexes, joins, and scaling models",
+          "Database scaling: read replicas, primary-replica writes, and sharding",
+          "The CAP Theorem: Consistency, Availability, and Partition Tolerance"
+        ],
+        readings: "Databases organize application state. SQL databases guarantee transactional safety (ACID). NoSQL databases scale horizontally by relaxing constraints. The CAP Theorem proves that a partitioned network must trade off Consistency or Availability.",
+        quiz: {
+          question: "According to the CAP Theorem, in the presence of a network partition (P), what trade-off must a system make?",
+          options: ["Speed vs Reliability", "Consistency vs Availability", "Security vs Latency", "Sharding vs Replication"],
+          answer: "Consistency vs Availability",
+          explanation: "The CAP Theorem states that in the event of a network partition, a distributed system must choose between Consistency or Availability."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: Message Queues & Fault Tolerance Patterns",
+        topics: [
+          "Asynchronous messaging: RabbitMQ, Apache Kafka, and pub-sub layers",
+          "System resilience: circuit breakers, retry backoffs, and rate limiting",
+          "Monitoring systems, heartbeat nodes, and disaster recovery processes"
+        ],
+        readings: "Decouple microservices using async message queues like RabbitMQ or Kafka. This lets slow tasks run in the background. Protect system health using rate limiters and circuit breakers, which temporarily cut off failing dependencies to prevent cascade crashes.",
+        quiz: {
+          question: "Which component acts as a buffer to decouple service communication in event-driven systems?",
+          options: ["API Gateway", "Message Broker (e.g. RabbitMQ)", "Distributed Cache", "Reverse Proxy"],
+          answer: "Message Broker (e.g. RabbitMQ)",
+          explanation: "Message brokers act as middle layers that accept, store, and deliver messages asynchronously between distinct services."
+        }
+      }
+    ]
+  },
+  "product mangement": {
+    tagline: "Discover product development lifecycles, Agile and Scrum methods, RICE frameworks, and analytics metrics.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Product Lifecycle & Vision Definition",
+        topics: [
+          "Product Lifecycle stages: Introduction, Growth, Maturity, Decline",
+          "Defining target segments, user problem spaces, and core value propositions",
+          "Structuring Minimum Viable Product (MVP) feature scopes"
+        ],
+        readings: "Product managers coordinate cross-functional teams to build solutions. The product lifecycle tracks a product from introduction to decline. Focus initially on an MVP: the simplest set of features needed to validate a concept with users.",
+        quiz: {
+          question: "What stage of the Product Lifecycle is focused on scaling customer acquisition and refining the product?",
+          options: ["Introduction", "Growth", "Maturity", "Decline"],
+          answer: "Growth",
+          explanation: "The Growth phase is characterized by rapid user acquisition, feature expansion, and scaling marketing and engineering operations."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: Agile Methodologies & Scrum Frameworks",
+        topics: [
+          "Agile manifesto principles vs traditional waterfall development",
+          "Scrum roles: Product Owner, Scrum Master, and Developers",
+          "Sprint cycles: planning meetings, daily standups, and reviews"
+        ],
+        readings: "Agile prioritizes iterative development. Scrum organizes work into short Sprints (usually 2 weeks). The Product Owner manages backlog prioritization, the Scrum Master resolves process obstacles, and Developers write the software.",
+        quiz: {
+          question: "In Scrum, who is responsible for managing the Product Backlog prioritization?",
+          options: ["Scrum Master", "Product Owner", "Lead Developer", "Project Manager"],
+          answer: "Product Owner",
+          explanation: "The Product Owner is solely responsible for prioritizing backlog items to align with user needs and business goals."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: Prioritization Frameworks & Product Strategy",
+        topics: [
+          "RICE prioritization (Reach, Impact, Confidence, Effort)",
+          "MoSCoW categorization (Must have, Should have, Could have, Won't have)",
+          "Mapping business ideas using the Lean Product Canvas"
+        ],
+        readings: "PMs must decide what features to build first under constraint. Use the RICE framework: (Reach * Impact * Confidence) / Effort to score ideas. Apply MoSCoW limits to determine absolute requirements for product releases.",
+        quiz: {
+          question: "What does the 'E' stand for in the RICE prioritization framework?",
+          options: ["Execution", "Efficiency", "Effort", "Engagement"],
+          answer: "Effort",
+          explanation: "Effort estimates the total person-weeks or hours required from the team to complete a feature."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: Product Analytics & Analytics Metrics",
+        topics: [
+          "Selecting North Star metrics and Key Performance Indicators (KPIs)",
+          "AARRR framework: Acquisition, Activation, Retention, Referral, Revenue",
+          "A/B testing flows, user tracking, and product feedback loops"
+        ],
+        readings: "Measure product success using metrics. The AARRR pirate metrics map user actions from first sign-up to payment. Identify a North Star Metric: the key measure of customer value. Validate new ideas with A/B experiments.",
+        quiz: {
+          question: "Which North Star Metric is most critical for evaluating daily retention in messaging platforms?",
+          options: ["Monthly Active Users", "Daily Active Users / Monthly Active Users Ratio", "Net Promoter Score", "Customer Acquisition Cost"],
+          answer: "Daily Active Users / Monthly Active Users Ratio",
+          explanation: "The DAU/MAU ratio measures user engagement stickiness, indicating how frequently users return to the platform."
+        }
+      }
+    ]
+  },
+  "Flutter development basic": {
+    tagline: "Explore Dart programming, Widget trees, row/column layouts, and State Management in Flutter.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Dart Basics & Flutter Setup",
+        topics: [
+          "Dart variables, control flows, objects, and types",
+          "Flutter setup, material design libraries, and pubspec.yaml assets",
+          "Entry functions: void main() and runApp() blocks"
+        ],
+        readings: "Flutter uses Apple's and Google's graphics engines to build multi-platform apps from one Dart codebase. Dart variables can be final (evaluated once at runtime) or const (evaluated at compile-time). Every app begins executing inside main().",
+        quiz: {
+          question: "Which Dart keyword is used to declare a variable whose value must be evaluated at compile-time?",
+          options: ["final", "const", "var", "dynamic"],
+          answer: "const",
+          explanation: "The const keyword indicates a compile-time constant, which is optimized by the compiler to reside in read-only memory."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: Component Trees: Stateless vs Stateful Widgets",
+        topics: [
+          "The Widget Tree, Element Tree, and RenderObject Tree",
+          "Stateless widgets for static view structures",
+          "Stateful widgets: lifecycle stages and trigger updates using setState()"
+        ],
+        readings: "In Flutter, everything is a widget. Stateless widgets do not store internal state. Stateful widgets store state in a separate State object, triggering UI updates with the setState() method.",
+        quiz: {
+          question: "Which method is triggered when a Stateful Widget needs to redraw its layout with updated values?",
+          options: ["build()", "initState()", "setState()", "dispose()"],
+          answer: "setState()",
+          explanation: "Calling setState() flags the framework that the internal state changed, scheduling a rebuild of the widget tree."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: Flutter Layouts & Multi-child Containers",
+        topics: [
+          "Standard layout widgets: Row, Column, Container, and Padding",
+          "Flexible alignments: Expanded, Flexible, and Spacer elements",
+          "Layering widgets using Stack and Positioned coordinates"
+        ],
+        readings: "Coordinate multi-child UI layouts in Flutter. Use Row to arrange children horizontally, Column to arrange them vertically, and Stack to overlap elements on top of each other. Use Expanded to fill remaining screen space.",
+        quiz: {
+          question: "Which widget allows children to overlap on top of each other in a coordinate layer?",
+          options: ["Column", "Row", "Stack", "ListView"],
+          answer: "Stack",
+          explanation: "The Stack widget paints its children relative to its container box, allowing them to overlap."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: State Management & ChangeNotifier Patterns",
+        topics: [
+          "Global state options: Provider, Riverpod, and InheritedWidgets",
+          "ChangeNotifier: declaring triggers and calling notifyListeners()",
+          "Consuming data models using Consumer and context.watch() contexts"
+        ],
+        readings: "Flutter state management syncs changes across routes. Using the Provider package, declare a ChangeNotifier model containing variables and triggers. Call notifyListeners() within state modifications to redraw consuming widgets.",
+        quiz: {
+          question: "What Flutter component is used to manage notifications and alert listeners to rebuild widgets?",
+          options: ["BuildContext", "Navigator", "ChangeNotifier", "InheritedWidget"],
+          answer: "ChangeNotifier",
+          explanation: "ChangeNotifier is a class in the Flutter SDK that sends notifications when properties are modified, triggering listener rebuilds."
+        }
+      }
+    ]
+  },
+  "Java basic": {
+    tagline: "Understand Java syntax, OOP inheritance/polymorphism, Collections frameworks, and Multithreading JVM internals.",
+    weeks: [
+      {
+        week: 1,
+        title: "Week 1: Java Basics, Compilation & JVM",
+        topics: [
+          "Java compilation flow: bytecode files (.class) and JVM execution",
+          "Variables, primitive data types (int, double, char), and operators",
+          "Control structures: conditionals (if-else, switch) and loop sequences"
+        ],
+        readings: "Java is a platform-independent, object-oriented programming language. The JDK compiler compiles source files into class files containing bytecode. The Java Virtual Machine (JVM) interprets or compiles this bytecode on target operating systems.",
+        quiz: {
+          question: "Which Java primitive type is used to represent single character values?",
+          options: ["String", "char", "Character", "byte"],
+          answer: "char",
+          explanation: "The char primitive type stores a single 16-bit Unicode character (like 'a' or 'B')."
+        }
+      },
+      {
+        week: 2,
+        title: "Week 2: Object-Oriented Java Programming (OOP)",
+        topics: [
+          "Declaring classes, objects, instance constructors, and parameters",
+          "OOP principles: Encapsulation, Inheritance, and Polymorphism",
+          "Method Overloading vs Method Overriding concepts"
+        ],
+        readings: "Java is built on OOP principles. Encapsulation hides object internals behind private fields. Inheritance lets a subclass inherit fields from a superclass. Polymorphism allows interfaces to represent multiple concrete types. Overriding redefines a superclass method in a subclass.",
+        quiz: {
+          question: "Which OOP concept allows a subclass to provide a specific implementation of a method already defined in its superclass?",
+          options: ["Overloading", "Overriding", "Encapsulation", "Polymorphism"],
+          answer: "Overriding",
+          explanation: "Method Overriding allows a subclass to redefine a method inherited from a superclass to provide specialized behavior."
+        }
+      },
+      {
+        week: 3,
+        title: "Week 3: Java Collections Framework & Exceptions",
+        topics: [
+          "Handling errors: try-catch-finally blocks and throw classes",
+          "List containers: ArrayList, LinkedList, and vector sequences",
+          "Set maps and unique associations: HashSet, TreeSet, and HashMap"
+        ],
+        readings: "Java Collections store groups of objects. Use List (ArrayList) for ordered sequences that can contain duplicates. Use Set (HashSet) for collections of unique items. Wrap risky code blocks (like operations on null pointers) in try-catch-finally statements.",
+        quiz: {
+          question: "Which Java collection class stores unique elements and does not guarantee insertion order?",
+          options: ["ArrayList", "HashMap", "HashSet", "LinkedList"],
+          answer: "HashSet",
+          explanation: "HashSet stores unique elements backed by a hash table, offering fast lookup times but no insertion order guarantees."
+        }
+      },
+      {
+        week: 4,
+        title: "Week 4: Threads, Concurrency & JVM Memory Model",
+        topics: [
+          "Creating execution threads: extending Thread vs implementing Runnable",
+          "Synchronization keywords and thread safety controls",
+          "JVM memory partitions: Stack frames vs Heap object allocations"
+        ],
+        readings: "Java programs run multithreaded tasks in parallel. Coordinate shared memory access between threads using the synchronized keyword, which locks access to a resource. Partitions split memory into local Stacks (for thread variables) and a shared Heap (for objects).",
+        quiz: {
+          question: "Which keyword in Java ensures that a method or block can be accessed by only one thread at a time?",
+          options: ["synchronized", "volatile", "static", "final"],
+          answer: "synchronized",
+          explanation: "The synchronized keyword prevents thread interference and memory consistency errors by locking access to methods or objects."
+        }
+      }
+    ]
   }
 };

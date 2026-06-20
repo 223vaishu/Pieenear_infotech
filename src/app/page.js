@@ -15,6 +15,12 @@ export default function Home() {
   const [currentQuote, setCurrentQuote] = useState(0);
   const [fade, setFade] = useState(true);
 
+  // Apply theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setFade(false);
@@ -207,10 +213,10 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "20px 6%",
-    background: "rgba(3, 7, 18, 0.6)",
+    background: "var(--bg-card)",
     backdropFilter: "blur(20px)",
     WebkitBackdropFilter: "blur(20px)",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+    borderBottom: "1px solid var(--border-color)",
     position: "sticky",
     top: 0,
     zIndex: 10,
@@ -302,7 +308,7 @@ const styles = {
     fontSize: "3.5rem",
     lineHeight: "1.15",
     fontWeight: 800,
-    color: "#ffffff",
+    color: "var(--text-primary)",
     marginBottom: "20px",
     letterSpacing: "-0.03em",
   },
@@ -349,7 +355,7 @@ const styles = {
     fontSize: "1.2rem",
     fontWeight: 500,
     lineHeight: "1.6",
-    color: "#fff",
+    color: "var(--text-primary)",
     fontStyle: "italic",
     marginBottom: "20px",
     zIndex: 1,
@@ -374,7 +380,7 @@ const styles = {
   },
   featuresSection: {
     padding: "80px 0 100px 0",
-    borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+    borderTop: "1px solid var(--border-color)",
   },
   sectionTitle: {
     fontSize: "2.2rem",
@@ -416,7 +422,7 @@ const styles = {
     fontSize: "1.25rem",
     fontWeight: 700,
     marginBottom: "12px",
-    color: "#ffffff",
+    color: "var(--text-primary)",
   },
   cardText: {
     fontSize: "0.95rem",
@@ -424,7 +430,7 @@ const styles = {
     lineHeight: "1.6",
   },
   footer: {
-    borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+    borderTop: "1px solid var(--border-color)",
     padding: "30px 6%",
     background: "var(--bg-secondary)",
   },

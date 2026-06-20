@@ -1,11 +1,49 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root {
-  /* Colors */
+  /* Colors (Light Mode Default) */
+  --bg-primary: #f9fafb;
+  --bg-secondary: #f3f4f6;
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-card-hover: rgba(255, 255, 255, 0.95);
+  --bg-input: rgba(0, 0, 0, 0.02);
+  
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-color-hover: rgba(0, 0, 0, 0.16);
+  --border-glow: rgba(99, 102, 241, 0.15);
+  
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  
+  --accent-primary: #4f46e5; /* Indigo */
+  --accent-secondary: #9333ea; /* Purple */
+  --accent-cyan: #0891b2; /* Cyan */
+  --accent-emerald: #059669; /* Emerald green */
+  --accent-rose: #e11d48; /* Rose */
+  
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  --shadow-glow: 0 0 25px -5px rgba(99, 102, 241, 0.12);
+  --shadow-glow-cyan: 0 0 25px -5px rgba(6, 182, 212, 0.12);
+  
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 16px;
+  --border-radius-xl: 24px;
+}
+
+[data-theme="dark"] {
+  /* Colors (Dark Mode) */
   --bg-primary: #030712;
   --bg-secondary: #0b0f19;
   --bg-card: rgba(17, 24, 39, 0.7);
   --bg-card-hover: rgba(31, 41, 55, 0.85);
+  --bg-input: rgba(255, 255, 255, 0.03);
   
   --border-color: rgba(255, 255, 255, 0.08);
   --border-color-hover: rgba(255, 255, 255, 0.15);
@@ -18,22 +56,11 @@
   --accent-primary: #6366f1; /* Indigo */
   --accent-secondary: #a855f7; /* Purple */
   --accent-cyan: #06b6d4; /* Cyan */
-  --accent-emerald: #10b981; /* Emerald green for status */
-  --accent-rose: #f43f5e; /* Rose for delete/warnings */
+  --accent-emerald: #10b981; /* Emerald green */
+  --accent-rose: #f43f5e; /* Rose */
   
-  --font-sans: 'Plus Jakarta Sans', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-glow: 0 0 25px -5px rgba(99, 102, 241, 0.25);
   --shadow-glow-cyan: 0 0 25px -5px rgba(6, 118, 212, 0.25);
-  
-  --border-radius-sm: 8px;
-  --border-radius-md: 12px;
-  --border-radius-lg: 16px;
-  --border-radius-xl: 24px;
 }
 
 /* Reset */
@@ -199,7 +226,7 @@ html, body {
 .form-input {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
   color: var(--text-primary);
@@ -210,7 +237,7 @@ html, body {
 
 .form-input:focus {
   border-color: var(--accent-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-input);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
@@ -384,7 +411,7 @@ html, body {
     align-items: center;
     justify-content: space-between;
     padding: 14px 20px;
-    background: rgba(11, 15, 25, 0.85);
+    background: var(--bg-card);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border-color);

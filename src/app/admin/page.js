@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [studentPassword, setStudentPassword] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState("Full-Stack Web Development");
+  const [selectedCourse, setSelectedCourse] = useState("Web Development");
 
   // Exam builder states
   const [showCreateExam, setShowCreateExam] = useState(false);
@@ -36,6 +36,23 @@ export default function AdminDashboard() {
 
   // Certificate modal state
   const [previewCert, setPreviewCert] = useState(null);
+
+  // Theme settings state
+  const [theme, setTheme] = useState("light");
+
+  // Load and apply theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") || "light";
+    setTheme(savedTheme);
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  }, []);
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
+    showToast(`Display mode updated to ${newTheme === "light" ? "Light" : "Dark"}!`, "success");
+  };
 
   // Initial load & seeding localStorage
   useEffect(() => {
@@ -70,51 +87,108 @@ export default function AdminDashboard() {
 
     // 2. Seed & Load Exams
     const storedExams = localStorage.getItem("pieenear_exams");
+    let needsSeeding = !storedExams;
     if (storedExams) {
+      try {
+        const parsed = JSON.parse(storedExams);
+        if (parsed.length === 0 || !parsed[0].course) {
+          needsSeeding = true;
+        }
+      } catch (e) {
+        needsSeeding = true;
+      }
+    }
+
+    if (!needsSeeding) {
       setExams(JSON.parse(storedExams));
     } else {
       const initialExams = [
         {
-          id: "ex-1",
-          title: "React & Next.js Essentials",
-          duration: 10, // minutes
-          passingGrade: 70, // percent
+          id: "ex-web",
+          title: "Web Development Final Evaluation",
+          course: "Web Development",
+          duration: 10,
+          passingGrade: 70,
           questions: [
-            {
-              text: "Which command initializes a brand-new Next.js project with Turbopack by default?",
-              optionA: "npm run dev",
-              optionB: "npx create-next-app@latest",
-              optionC: "npm install next",
-              optionD: "next start --turbo",
-              correctOption: "B",
-              marks: 5
-            },
-            {
-              text: "Which hook should you use to coordinate client side effects in React Components?",
-              optionA: "useState",
-              optionB: "useContext",
-              optionC: "useEffect",
-              optionD: "useReducer",
-              correctOption: "C",
-              marks: 5
-            }
+            { text: "Which HTML5 semantic element is most suitable for site navigation links?", optionA: "section", optionB: "article", optionC: "nav", optionD: "aside", correctOption: "C", marks: 5 },
+            { text: "Which CSS property specifies a grid container layout?", optionA: "display: grid", optionB: "display: flex", optionC: "display: inline", optionD: "display: block", correctOption: "A", marks: 5 }
           ]
         },
         {
-          id: "ex-2",
-          title: "UI/UX Layout Concepts",
-          duration: 15,
-          passingGrade: 75,
+          id: "ex-app",
+          title: "App Development Final Evaluation",
+          course: "App Development",
+          duration: 10,
+          passingGrade: 70,
           questions: [
-            {
-              text: "Which CSS display setting is optimized for designing two-dimensional web layouts (both rows and columns)?",
-              optionA: "display: block",
-              optionB: "display: flex",
-              optionC: "display: grid",
-              optionD: "display: inline",
-              correctOption: "C",
-              marks: 5
-            }
+            { text: "Which architecture is optimized for single-codebase cross-platform mobile apps?", optionA: "Kotlin Native", optionB: "Swift Native", optionC: "Cross-Platform Framework", optionD: "Java VM", correctOption: "C", marks: 5 },
+            { text: "What is the default Flexbox layout direction in React Native?", optionA: "row", optionB: "column", optionC: "row-reverse", optionD: "column-reverse", correctOption: "B", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-uiux",
+          title: "UI/UX Design Certification Challenge",
+          course: "UI ux",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "What is the first fundamental phase of the Design Thinking framework?", optionA: "Ideate", optionB: "Define", optionC: "Empathize", optionD: "Prototype", correctOption: "C", marks: 5 },
+            { text: "Which Figma layout feature automatically handles dynamic padding and row flow?", optionA: "Smart Animate", optionB: "Auto-Layout", optionC: "Group grids", optionD: "Component states", correctOption: "B", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-aiml",
+          title: "AI/ML Basics Certification Exam",
+          course: "AI/ML basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which Python package is specialized for high-performance array and matrix mathematics?", optionA: "Matplotlib", optionB: "NumPy", optionC: "Pandas", optionD: "PyTorch", correctOption: "C", marks: 5 },
+            { text: "What clustering algorithm iteratively clusters data around distance centroids?", optionA: "K-Means", optionB: "Linear Regression", optionC: "Decision Tree", optionD: "SVM", correctOption: "A", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-sysdesign",
+          title: "System Design Basic Final Exam",
+          course: "System desgin basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "What is horizontal scaling in server architecture?", optionA: "Adding memory to a server", optionB: "Adding CPU capacity to a server", optionC: "Adding more server nodes to the pool", optionD: "Increasing DB cache sizes", correctOption: "C", marks: 5 },
+            { text: "According to CAP theorem, which property is traded off in a network partition failure?", optionA: "Caching", optionB: "Performance", optionC: "Consistency or Availability", optionD: "Consistency or Availability", correctOption: "C", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-pm",
+          title: "Product Management Evaluation Challenge",
+          course: "product mangement",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which PM canvas maps vision, cost structure, and channels on a single page?", optionA: "RICE metric", optionB: "PRD canvas", optionC: "Lean Canvas", optionD: "MoSCoW list", correctOption: "C", marks: 5 },
+            { text: "In feature prioritization, what does the R in RICE metric represent?", optionA: "Revenue", optionB: "Reach", optionC: "Retention", optionD: "Role", correctOption: "B", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-flutter",
+          title: "Flutter Development Basic Evaluation",
+          course: "Flutter development basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "Which Flutter widget is used to align items vertically?", optionA: "Row", optionB: "Column", optionC: "Scaffold", optionD: "Center", correctOption: "B", marks: 5 },
+            { text: "Which class acts as the notifyListeners sender inside Flutter Provider layouts?", optionA: "BuildContext", optionB: "Navigator", optionC: "ChangeNotifier", optionD: "Consumer", correctOption: "C", marks: 5 }
+          ]
+        },
+        {
+          id: "ex-java",
+          title: "Java Basics Certification Exam",
+          course: "Java basic",
+          duration: 10,
+          passingGrade: 70,
+          questions: [
+            { text: "What system executes Java bytecode dynamically?", optionA: "JDK Compiler", optionB: "JVM (Java Virtual Machine)", optionC: "System Kernel", optionD: "JRE Library", correctOption: "B", marks: 5 },
+            { text: "Which OOP access modifier restricts visibility solely inside the declaring class?", optionA: "private", optionB: "public", optionC: "protected", optionD: "default", correctOption: "A", marks: 5 }
           ]
         }
       ];
@@ -540,7 +614,7 @@ export default function AdminDashboard() {
         </button>
         <div className="mobile-header-brand">
           <span style={styles.logoIcon}>P</span>
-          <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "#fff" }}>Pieenear</span>
+          <span style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--text-primary)" }}>Pieenear</span>
         </div>
         <div style={{ width: "22px" }}></div>
       </div>
@@ -609,6 +683,16 @@ export default function AdminDashboard() {
           >
             🏆 Certificate Vault
           </button>
+          <button
+            style={{
+              ...styles.navBtn,
+              backgroundColor: activeTab === "settings" ? "rgba(99, 102, 241, 0.15)" : "transparent",
+              color: activeTab === "settings" ? "var(--accent-primary)" : "var(--text-secondary)"
+            }}
+            onClick={() => { setActiveTab("settings"); setShowCreateExam(false); setShowAddForm(false); setSidebarOpen(false); }}
+          >
+            ⚙️ Hub Settings
+          </button>
         </nav>
 
         <div style={styles.sidebarFooter}>
@@ -635,6 +719,7 @@ export default function AdminDashboard() {
               {activeTab === "exams" && "Exam Program Manager"}
               {activeTab === "results" && "Examination Results Log"}
               {activeTab === "certificates" && "Academic Certificates Vault"}
+              {activeTab === "settings" && "Console System Settings"}
             </h1>
             <p style={styles.subtitleText}>Manage users, coordinate exam curriculums, calculate grades, and generate certificates.</p>
           </div>
@@ -764,9 +849,14 @@ export default function AdminDashboard() {
                         value={selectedCourse}
                         onChange={(e) => setSelectedCourse(e.target.value)}
                       >
-                        <option value="Full-Stack Web Development">Full-Stack Web Development</option>
-                        <option value="Data Science & ML">Data Science & ML</option>
-                        <option value="UI/UX Core Design">UI/UX Core Design</option>
+                        <option value="Web Development">Web Development</option>
+                        <option value="App Development">App Development</option>
+                        <option value="UI ux">UI ux</option>
+                        <option value="AI/ML basic">AI/ML basic</option>
+                        <option value="System desgin basic">System desgin basic</option>
+                        <option value="product mangement">product mangement</option>
+                        <option value="Flutter development basic">Flutter development basic</option>
+                        <option value="Java basic">Java basic</option>
                       </select>
                     </div>
                     <div className="form-group" style={{ flex: 1 }}>
@@ -1089,7 +1179,7 @@ export default function AdminDashboard() {
                             onClick={() => handleTogglePublish(res.id)}
                             style={{
                               ...styles.actionBtn,
-                              color: "#fff",
+                              color: res.published ? "var(--accent-rose)" : "var(--accent-emerald)",
                               background: res.published ? "rgba(244, 63, 94, 0.1)" : "rgba(16, 185, 129, 0.1)",
                               borderColor: res.published ? "var(--accent-rose)" : "var(--accent-emerald)",
                               borderWidth: "1px",
@@ -1204,6 +1294,35 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "settings" && (
+          <div className="animate-fade-in" style={styles.section}>
+            <div style={styles.profileGrid}>
+              <div className="glass-panel" style={styles.profileCard}>
+                <h2 style={{ ...styles.formTitle, marginBottom: "20px" }}>Display Mode Settings</h2>
+                <div style={styles.profileDetailGroup}>
+                  <span style={styles.profileDetailLabel}>Select Theme Mode</span>
+                  <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                    <button
+                      onClick={() => handleThemeChange("light")}
+                      className={`btn ${theme === "light" ? "btn-primary" : "btn-secondary"}`}
+                      style={{ flex: 1 }}
+                    >
+                      ☀️ Light Mode (Default)
+                    </button>
+                    <button
+                      onClick={() => handleThemeChange("dark")}
+                      className={`btn ${theme === "dark" ? "btn-primary" : "btn-secondary"}`}
+                      style={{ flex: 1 }}
+                    >
+                      🌙 Dark Mode
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -1431,7 +1550,7 @@ const styles = {
   formTitle: {
     fontSize: "1.4rem",
     fontWeight: 700,
-    color: "#fff",
+    color: "var(--text-primary)",
   },
   formRow: {
     display: "flex",
@@ -1551,5 +1670,24 @@ const styles = {
     padding: "24px",
     borderRadius: "var(--border-radius-md)",
     marginBottom: "20px",
+  },
+  profileGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "24px",
+  },
+  profileCard: {
+    padding: "30px",
+    borderRadius: "var(--border-radius-lg)",
+  },
+  profileDetailGroup: {
+    padding: "16px 0",
+    borderBottom: "1px solid rgba(255,255,255,0.03)",
+  },
+  profileDetailLabel: {
+    fontSize: "0.8rem",
+    color: "var(--text-muted)",
+    display: "block",
+    marginBottom: "4px",
   }
 };

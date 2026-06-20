@@ -48,7 +48,7 @@ export async function GET() {
         name: u.user_metadata?.name || 'Unnamed',
         email: u.email,
         password: u.user_metadata?.password || '••••••••', // Send metadata saved password
-        course: u.user_metadata?.course || 'Full-Stack Web Development',
+        course: u.user_metadata?.course || 'Web Development',
         joinedDate: u.user_metadata?.joinedDate || 'June 2026',
         status: u.user_metadata?.status || 'Active'
       }));

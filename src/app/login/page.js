@@ -13,6 +13,12 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Load and apply display theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  }, []);
+
   // Pre-fill fields on tab change to make testing extremely easy for the user
   useEffect(() => {
     setError("");
@@ -67,7 +73,7 @@ export default function Login() {
             id: user.id,
             name: metadata.name || "Alex Mercer",
             email: user.email,
-            course: metadata.course || "Full-Stack Web Development",
+            course: metadata.course || "Web Development",
             joinedDate: metadata.joinedDate || "June 2026",
             status: metadata.status || "Active"
           };
@@ -96,7 +102,7 @@ export default function Login() {
           matchedStudent = {
             name: "Alex Mercer",
             email: "student@pieenear.com",
-            course: "Full-Stack Web Development",
+            course: "Web Development",
             joinedDate: "June 2026",
             status: "Active"
           };
@@ -143,7 +149,7 @@ export default function Login() {
             style={{
               ...styles.tabBtn,
               borderBottomColor: activeTab === "student" ? "var(--accent-primary)" : "transparent",
-              color: activeTab === "student" ? "#fff" : "var(--text-secondary)",
+              color: activeTab === "student" ? "var(--text-primary)" : "var(--text-secondary)",
             }}
             onClick={() => setActiveTab("student")}
             disabled={loading}
@@ -154,7 +160,7 @@ export default function Login() {
             style={{
               ...styles.tabBtn,
               borderBottomColor: activeTab === "admin" ? "var(--accent-secondary)" : "transparent",
-              color: activeTab === "admin" ? "#fff" : "var(--text-secondary)",
+              color: activeTab === "admin" ? "var(--text-primary)" : "var(--text-secondary)",
             }}
             onClick={() => setActiveTab("admin")}
             disabled={loading}
@@ -298,7 +304,7 @@ const styles = {
   brandName: {
     fontSize: "1.4rem",
     fontWeight: 800,
-    color: "#fff",
+    color: "var(--text-primary)",
     letterSpacing: "-0.02em",
   },
   subtitle: {
@@ -325,7 +331,7 @@ const styles = {
   errorAlert: {
     backgroundColor: "rgba(244, 63, 94, 0.15)",
     border: "1px solid var(--accent-rose)",
-    color: "#fda4af",
+    color: "var(--accent-rose)",
     padding: "12px",
     borderRadius: "var(--border-radius-sm)",
     fontSize: "0.85rem",
@@ -384,9 +390,9 @@ const styles = {
   },
   code: {
     fontFamily: "var(--font-mono)",
-    background: "rgba(255,255,255,0.08)",
+    background: "var(--bg-secondary)",
     padding: "2px 6px",
     borderRadius: "4px",
-    color: "#fff",
+    color: "var(--text-primary)",
   }
 };
