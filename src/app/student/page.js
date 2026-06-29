@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 
+const OLD_COURSE_MAP = {
+  "Web Development": "Web Development (Frontend & Full Stack)",
+  "App Development": "Android App Development",
+  "UI ux": "UI/UX",
+  "AI/ML basic": "Machine Learning",
+  "System desgin basic": "Data Structure & Algorithm with System Design",
+  "product mangement": "Entrepreneurship",
+  "Flutter development basic": "Android App Development",
+  "Java basic": "Java"
+};
+
 export default function StudentDashboard() {
   const router = useRouter();
   const [studentInfo, setStudentInfo] = useState(null);
@@ -45,8 +56,31 @@ export default function StudentDashboard() {
   const [selectedQuizOption, setSelectedQuizOption] = useState({}); // { weekNum: optionString }
   const [quizFeedback, setQuizFeedback] = useState({}); // { weekNum: { isCorrect, text } }
 
+  // 5-Screen Study Desk navigation states
+  const [deskView, setDeskView] = useState("launchpad"); // 'launchpad', 'directory', 'curriculum', 'sidebar', 'reader'
+  const [selectedDomainName, setSelectedDomainName] = useState("");
+  const [activeModuleIndex, setActiveModuleIndex] = useState(0); // 0-3 (Module 1-4)
+  const [activeTopicIndex, setActiveTopicIndex] = useState(0); // 0-1 (Topic 1.1-1.2 or similar)
+  const [readingMode, setReadingMode] = useState("lesson"); // 'lesson' or 'notes'
+  const [curriculumTab, setCurriculumTab] = useState("path"); // 'path', 'sessions', 'assessments', 'about'
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("All");
+  const [unlockedDomains, setUnlockedDomains] = useState({}); // { [domainName]: true }
+
+  // Effect to sync student course to selected domain
+  useEffect(() => {
+    if (studentInfo && studentInfo.course) {
+      const mappedCourse = OLD_COURSE_MAP[studentInfo.course] || studentInfo.course;
+      setSelectedDomainName(mappedCourse);
+    }
+  }, [studentInfo]);
+
   // Theme settings state
   const [theme, setTheme] = useState("light");
+
+  // Appeal / Suspension State
+  const [appealMessage, setAppealMessage] = useState("");
+  const [appealSubmitted, setAppealSubmitted] = useState(false);
 
   // Load and apply theme on mount
   useEffect(() => {
@@ -241,6 +275,30 @@ export default function StudentDashboard() {
       localStorage.setItem("pieenear_tickets", JSON.stringify(defaultTicket));
       setTickets(defaultTicket);
     }
+
+    // Sync latest student info and status with Supabase or localStorage fallback
+    fetch("/api/students")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && !data.error) {
+          const currentEmail = localStorage.getItem("userEmail") || email;
+          const updatedInfo = data.find(s => s.email.toLowerCase() === currentEmail.toLowerCase());
+          if (updatedInfo) {
+            setStudentInfo(updatedInfo);
+            localStorage.setItem("currentStudent", JSON.stringify(updatedInfo));
+          }
+        }
+      })
+      .catch((err) => {
+        console.error("API student sync error:", err);
+        const storedStudents = JSON.parse(localStorage.getItem("pieenear_students") || "[]");
+        const currentEmail = localStorage.getItem("userEmail") || email;
+        const localUpdate = storedStudents.find(s => s.email.toLowerCase() === currentEmail.toLowerCase());
+        if (localUpdate) {
+          setStudentInfo(localUpdate);
+          localStorage.setItem("currentStudent", JSON.stringify(localUpdate));
+        }
+      });
   }, [router]);
 
   // Handle active exam timer
@@ -434,6 +492,41 @@ export default function StudentDashboard() {
     router.push("/login");
   };
 
+  const handleSendAppeal = (e) => {
+    e.preventDefault();
+    if (!appealMessage.trim()) return;
+
+    const newAppeal = {
+      id: "appeal-" + Date.now(),
+      studentName: studentInfo.name,
+      studentEmail: studentInfo.email,
+      message: appealMessage.trim(),
+      timestamp: new Date().toLocaleString(),
+      status: "Pending"
+    };
+
+    // Save to list
+    const storedAppeals = JSON.parse(localStorage.getItem("pieenear_suspension_reports") || "[]");
+    localStorage.setItem("pieenear_suspension_reports", JSON.stringify([newAppeal, ...storedAppeals]));
+
+    // Also push to tickets for visibility
+    const storedTickets = JSON.parse(localStorage.getItem("pieenear_tickets") || "[]");
+    const appealTicket = {
+      id: "tkt-" + Date.now(),
+      subject: `Suspension Appeal: ${studentInfo.name}`,
+      category: "Administrative",
+      description: appealMessage.trim(),
+      date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+      status: "Pending",
+      reply: null
+    };
+    localStorage.setItem("pieenear_tickets", JSON.stringify([appealTicket, ...storedTickets]));
+
+    setAppealSubmitted(true);
+    setAppealMessage("");
+    showToast("Appeal report submitted successfully to the administrator!", "success");
+  };
+
   const handleQuizSubmit = (weekNum, selectedOption, correctAnswer, explanation) => {
     const isCorrect = selectedOption === correctAnswer;
     
@@ -471,6 +564,146 @@ export default function StudentDashboard() {
 
   if (!studentInfo) {
     return <div style={styles.loadingContainer}>Accessing Study Workspace...</div>;
+  }
+
+  // Check if student account status is Suspended
+  if (studentInfo.status === "Suspended") {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "var(--bg-primary)",
+        position: "relative",
+        overflow: "hidden",
+        padding: "20px",
+      }}>
+        {/* Glow Background */}
+        <div style={{
+          position: "absolute",
+          width: "450px",
+          height: "450px",
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(239, 68, 68, 0.15) 0%, rgba(0,0,0,0) 70%)",
+          zIndex: 0,
+        }}></div>
+
+        <div className="glass-panel animate-fade-in" style={{
+          width: "100%",
+          maxWidth: "480px",
+          padding: "40px",
+          borderRadius: "var(--border-radius-xl)",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.4)",
+          zIndex: 1,
+          textAlign: "center",
+          border: "1px solid rgba(239, 68, 68, 0.2)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "24px"
+        }}>
+          <div style={{
+            width: "80px",
+            height: "80px",
+            borderRadius: "50%",
+            background: "rgba(239, 68, 68, 0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "2.5rem"
+          }}>
+            🛡️
+          </div>
+
+          <div>
+            <span style={{
+              fontSize: "0.75rem",
+              padding: "4px 12px",
+              borderRadius: "20px",
+              background: "rgba(239, 68, 68, 0.15)",
+              color: "var(--accent-rose)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              Access Suspended
+            </span>
+            <h2 style={{ fontSize: "1.8rem", fontWeight: 800, marginTop: "12px", color: "var(--text-primary)" }}>
+              Account Suspended
+            </h2>
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginTop: "12px", lineHeight: "1.6" }}>
+              Your account is suspended and contact the admin for that thing.
+            </p>
+          </div>
+
+          {/* Admin Contact Information */}
+          <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-color)", padding: "16px 20px", borderRadius: "var(--border-radius-md)", width: "100%", textAlign: "left" }}>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "4px" }}>Admin Contact Email</p>
+            <p style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--accent-primary)" }}>admin@pieenear.com</p>
+          </div>
+
+          {/* Report Appeal Form */}
+          <div style={{ width: "100%", textAlign: "left" }}>
+            <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
+              Submit Appeal & Report Issue
+            </h4>
+            
+            {appealSubmitted ? (
+              <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)", padding: "16px", borderRadius: "var(--border-radius-md)", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span style={{ fontSize: "1.2rem" }}>✅ Appeal Registered</span>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                  Your appeal has been successfully sent to the administrator review queue. We will check your account settings shortly.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSendAppeal} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <textarea
+                  className="form-input"
+                  style={{
+                    width: "100%",
+                    minHeight: "90px",
+                    resize: "none",
+                    fontSize: "0.9rem",
+                    padding: "10px 12px",
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "var(--border-radius-md)",
+                    color: "var(--text-primary)",
+                  }}
+                  placeholder="Explain why your account should be reactivated or report the issue here..."
+                  value={appealMessage}
+                  onChange={(e) => setAppealMessage(e.target.value)}
+                  required
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: "10px", fontSize: "0.9rem" }}
+                >
+                  Send Support Report
+                </button>
+              </form>
+            )}
+          </div>
+
+          <div style={{ width: "100%", height: "1px", background: "var(--border-color)", margin: "8px 0" }}></div>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem("userRole");
+              localStorage.removeItem("currentStudent");
+              localStorage.removeItem("userEmail");
+              router.push("/login");
+            }}
+            className="btn btn-danger"
+            style={{ width: "100%", padding: "14px", fontSize: "1rem" }}
+          >
+            Logout Session
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Filter dynamic lists for this specific student
@@ -800,242 +1033,851 @@ export default function StudentDashboard() {
             </header>
 
             {/* TAB CONTROLS */}
-
-            {/* STUDY DESK */}
             {activeTab === "desk" && (() => {
-              const currentCourse = courseData[studentInfo.course] || courseData["Web Development"];
+              const currentCourse = generateCurriculumForDomain(selectedDomainName || studentInfo.course || "Web Development");
+              
+              // Calculate dynamic progress values
               const completedCount = Object.values(quizProgress).filter(Boolean).length;
-              const quizPercentage = Math.round((completedCount / 4) * 100);
+              const quizPercentage = Math.round((completedCount / 8) * 100); // 8 subtopics total (4 modules * 2 topics)
 
-              return (
-                <div className="animate-fade-in" style={styles.section}>
-                  {/* Welcome Card */}
-                  <div className="glass-panel" style={styles.welcomeBanner}>
-                    <div>
-                      <h2 style={{ fontSize: "1.8rem", fontWeight: 800, marginBottom: "8px" }}>
-                        Welcome back, <span className="gradient-text">{studentInfo.name}</span>!
-                      </h2>
-                      <p style={{ color: "var(--text-secondary)", maxWidth: "550px", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                        Track your 1-month certification curriculum, complete weekly quizzes, and review your assigned study notes.
-                      </p>
+              const enrolledCourse = OLD_COURSE_MAP[studentInfo.course] || studentInfo.course;
+              const isLocked = ["curriculum", "sidebar", "reader"].includes(deskView) && selectedDomainName && enrolledCourse !== selectedDomainName && !unlockedDomains[selectedDomainName];
+
+              if (isLocked) {
+                return (
+                  <div className="animate-fade-in" style={styles.section}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <button 
+                        className="btn btn-secondary" 
+                        onClick={() => setDeskView("directory")}
+                        style={{ padding: "8px 16px", fontSize: "0.9rem" }}
+                      >
+                        ← Browse Domains
+                      </button>
                     </div>
-                    <div style={styles.progressGaugeCard}>
-                      <div style={styles.gaugeContainer}>
-                        <svg width="80" height="80" viewBox="0 0 36 36" style={styles.svgWheel}>
-                          <path style={styles.wheelTrack} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                          <path
-                            style={{
-                              ...styles.wheelFill,
-                              strokeDasharray: `${quizPercentage}, 100`,
-                              stroke: "var(--accent-primary)"
-                            }}
-                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                        </svg>
-                        <div style={styles.gaugeText}>
-                          {quizPercentage}%
-                        </div>
+                    
+                    <div className="glass-panel" style={{ padding: "50px 40px", maxWidth: "600px", margin: "40px auto", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "24px", borderRadius: "var(--border-radius-lg)", border: "1px solid rgba(244, 63, 94, 0.15)", boxShadow: "0 20px 40px rgba(0,0,0,0.3)" }}>
+                      <div style={{ width: "80px", height: "80px", borderRadius: "50%", background: "rgba(244, 63, 94, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.5rem" }}>
+                        🔒
                       </div>
-                      <div style={{ textAlign: "right" }}>
-                        <p style={{ fontWeight: 700, fontSize: "1.1rem" }}>
-                          {myResults.some(r => r.status === "Pass") ? "Graduated" : "In Progress"}
+                      <div>
+                        <span style={styles.weekPendingBadge}>Premium upgrade required</span>
+                        <h2 style={{ fontSize: "1.8rem", fontWeight: 800, marginTop: "12px", color: "var(--text-primary)" }}>Syllabus Locked</h2>
+                        <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginTop: "8px", lineHeight: "1.5" }}>
+                          You are currently enrolled in <strong>{studentInfo.course}</strong>. 
+                          Once a topic is assigned, you can only access that syllabus. 
+                          Please **pay ₹2,000 for accessing this syllabus** ({selectedDomainName}).
                         </p>
-                        <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Syllabus progress</p>
+                      </div>
+                      
+                      <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-color)", padding: "20px 30px", borderRadius: "var(--border-radius-md)", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ textAlign: "left" }}>
+                          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", textDecoration: "line-through" }}>Original value: ₹5,999</p>
+                          <p style={{ fontSize: "1.6rem", fontWeight: 800, color: "var(--accent-emerald)" }}>Upgrade Fee: ₹2,000</p>
+                        </div>
+                        <span style={{ fontSize: "0.75rem", background: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)", padding: "4px 10px", borderRadius: "20px", fontWeight: 600 }}>One-time payment</span>
+                      </div>
+
+                      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <button 
+                          className="btn btn-primary" 
+                          style={{ width: "100%", padding: "14px", fontSize: "1rem" }}
+                          onClick={() => {
+                            setUnlockedDomains({ ...unlockedDomains, [selectedDomainName]: true });
+                            showToast(`Syllabus for "${selectedDomainName}" successfully unlocked!`, "success");
+                          }}
+                        >
+                          Pay ₹2,000 & Unlock Syllabus
+                        </button>
+                        
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ width: "100%", padding: "14px", fontSize: "1rem" }}
+                          onClick={() => setDeskView("directory")}
+                        >
+                          Return to Directory
+                        </button>
                       </div>
                     </div>
                   </div>
+                );
+              }
 
-                  <div className="desk-grid">
-                    {/* 4-Week Interactive Roadmap */}
-                    <div className="glass-panel" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                      <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "5px" }}>
-                        🗓️ 4-Week Interactive Roadmap
-                      </h3>
-                      <div>
-                        {currentCourse.weeks.map((wk) => {
-                          const isCompleted = quizProgress[wk.week];
-                          const isExpanded = expandedWeek === wk.week;
-                          const feedback = quizFeedback[wk.week];
-                          const selectedOption = selectedQuizOption[wk.week];
-
-                          return (
-                            <div key={wk.week} style={styles.accordionItem}>
-                              <div 
-                                style={{
-                                  ...styles.accordionHeader,
-                                  ...(isExpanded ? styles.accordionHeaderExpanded : {})
-                                }}
-                                onClick={() => setExpandedWeek(isExpanded ? null : wk.week)}
-                              >
-                                <span style={styles.accordionTitle}>
-                                  {isCompleted ? "✅" : "📖"} {wk.title}
-                                </span>
-                                <span style={isCompleted ? styles.weekCompletedBadge : styles.weekPendingBadge}>
-                                  {isCompleted ? "Completed" : "In Progress"}
-                                </span>
-                              </div>
-                              {isExpanded && (
-                                <div style={styles.accordionContent}>
-                                  <div>
-                                    <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "8px" }}>🔑 Key Concepts</h4>
-                                    <ul style={{ paddingLeft: "20px", color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: "1.6" }}>
-                                      {wk.topics.map((t, idx) => (
-                                        <li key={idx} style={{ marginBottom: "4px" }}>{t}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                  
-                                  <div>
-                                    <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-primary)", marginBottom: "8px" }}>📚 Study Notes</h4>
-                                    <div style={styles.readingContainer}>
-                                      {wk.readings}
-                                    </div>
-                                  </div>
-
-                                  {/* Weekly Concept Review Quiz */}
-                                  <div style={styles.quizSection}>
-                                    <h4 style={styles.quizQuestion}>📝 Week {wk.week} Review Checkpoint</h4>
-                                    <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "12px" }}>
-                                      {wk.quiz.question}
-                                    </p>
-                                    <div style={styles.quizOptionsGrid}>
-                                      {wk.quiz.options.map((opt) => {
-                                        const isSelected = selectedOption === opt;
-                                        let optionStyle = { ...styles.quizOptionBtn };
-                                        
-                                        if (isSelected) {
-                                          optionStyle = { ...optionStyle, ...styles.quizOptionBtnSelected };
-                                        }
-                                        if (isCompleted && opt === wk.quiz.answer) {
-                                          optionStyle = { ...optionStyle, ...styles.quizOptionBtnCorrect };
-                                        } else if (isCompleted && isSelected && opt !== wk.quiz.answer) {
-                                          optionStyle = { ...optionStyle, ...styles.quizOptionBtnIncorrect };
-                                        } else if (feedback && isSelected) {
-                                          if (feedback.isCorrect) {
-                                            optionStyle = { ...optionStyle, ...styles.quizOptionBtnCorrect };
-                                          } else {
-                                            optionStyle = { ...optionStyle, ...styles.quizOptionBtnIncorrect };
-                                          }
-                                        }
-
-                                        return (
-                                          <button
-                                            key={opt}
-                                            type="button"
-                                            disabled={isCompleted}
-                                            style={optionStyle}
-                                            onClick={() => setSelectedQuizOption({
-                                              ...selectedQuizOption,
-                                              [wk.week]: opt
-                                            })}
-                                          >
-                                            {opt}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-
-                                    {!isCompleted && selectedOption && (
-                                      <button
-                                        type="button"
-                                        className="btn btn-primary"
-                                        style={{ width: "100%", padding: "10px", fontSize: "0.9rem" }}
-                                        onClick={() => handleQuizSubmit(wk.week, selectedOption, wk.quiz.answer, wk.quiz.explanation)}
-                                      >
-                                        Submit Answer Check
-                                      </button>
-                                    )}
-
-                                    {isCompleted && (
-                                      <div style={{ ...styles.quizFeedbackAlert, ...styles.quizFeedbackCorrect }}>
-                                        ✨ <strong>Completed:</strong> You successfully passed this week's checkpoint.
-                                        <p style={{ marginTop: "4px", fontSize: "0.85rem", opacity: 0.9 }}>
-                                          {wk.quiz.explanation}
-                                        </p>
-                                      </div>
-                                    )}
-
-                                    {!isCompleted && feedback && !feedback.isCorrect && (
-                                      <div style={{ ...styles.quizFeedbackAlert, ...styles.quizFeedbackIncorrect }}>
-                                        ⚠️ {feedback.text}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Right Sidebar Info Cards */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-                      {/* Program Details Card */}
-                      <div className="glass-panel" style={styles.announcementCard}>
-                        <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📋 Program Details</h3>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <span style={{ fontSize: "0.8rem", color: "var(--accent-cyan)", fontWeight: 700 }}>ASSIGNED COURSE</span>
-                          <h4 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--text-primary)" }}>{studentInfo.course}</h4>
-                          <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: "1.4", marginTop: "4px" }}>
-                            {currentCourse.tagline}
+              return (
+                <div className="animate-fade-in" style={styles.section}>
+                  
+                  {/* VIEW 1: LAUNCHPAD */}
+                  {deskView === "launchpad" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
+                      {/* Welcome Card */}
+                      <div className="glass-panel" style={styles.welcomeBanner}>
+                        <div>
+                          <h2 style={{ fontSize: "1.8rem", fontWeight: 800, marginBottom: "8px" }}>
+                            Welcome back, <span className="gradient-text">{studentInfo.name}</span>!
+                          </h2>
+                          <p style={{ color: "var(--text-secondary)", maxWidth: "550px", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                            Track your upgraded certification curriculum, browse the complete industry domains library, and manage your credentials.
                           </p>
-                          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "12px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "4px" }}>
-                              <span style={{ color: "var(--text-muted)" }}>Syllabus Completed</span>
-                              <strong style={{ color: "var(--accent-emerald)" }}>{completedCount} of 4 Weeks</strong>
-                            </div>
-                            <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", overflow: "hidden" }}>
-                              <div 
-                                style={{ 
-                                  width: `${(completedCount / 4) * 100}%`, 
-                                  height: "100%", 
-                                  background: "linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-cyan) 100%)",
-                                  transition: "width 0.3s ease"
+                        </div>
+                        <div style={styles.progressGaugeCard}>
+                          <div style={styles.gaugeContainer}>
+                            <svg width="80" height="80" viewBox="0 0 36 36" style={styles.svgWheel}>
+                              <path style={styles.wheelTrack} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                              <path
+                                style={{
+                                  ...styles.wheelFill,
+                                  strokeDasharray: `${quizPercentage}, 100`,
+                                  stroke: "var(--accent-primary)"
                                 }}
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                               />
+                            </svg>
+                            <div style={styles.gaugeText}>
+                              {quizPercentage}%
                             </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <p style={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                              {completedCount === 8 ? "Graduated" : "In Progress"}
+                            </p>
+                            <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Syllabus progress</p>
                           </div>
                         </div>
                       </div>
 
-                      {/* Fast Summary */}
-                      <div className="glass-panel" style={styles.scheduleCard}>
-                        <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📊 Fast Summary</h3>
-                        <div style={styles.statLogItem}>
-                          <span>Assigned Available Tests</span>
-                          <strong>{myAvailableExams.length}</strong>
-                        </div>
-                        <div style={styles.statLogItem}>
-                          <span>Evaluations Completed</span>
-                          <strong>{myResults.length}</strong>
-                        </div>
-                        <div style={styles.statLogItem}>
-                          <span>Earned Certificates</span>
-                          <strong>{myCertificates.length}</strong>
-                        </div>
-                      </div>
+                      {/* Main Launchpad Materials Box */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--text-primary)" }}>📂 My Active Learning Libraries</h3>
+                        <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
+                          
+                          {/* Livebooks Square Card (as shown in img 1) */}
+                          <div 
+                            className="glass-panel glass-panel-hover" 
+                            style={{ 
+                              width: "220px", 
+                              height: "220px", 
+                              display: "flex", 
+                              flexDirection: "column", 
+                              alignItems: "center", 
+                              justifyContent: "space-between", 
+                              padding: "20px 15px",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              borderRadius: "var(--border-radius-lg)"
+                            }}
+                            onClick={() => setDeskView("directory")}
+                          >
+                            <div style={{ flexGrow: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {/* Precise image-1 vector drawing copy */}
+                              <svg viewBox="0 0 100 80" style={{ width: "90px", height: "70px" }}>
+                                <rect x="10" y="10" width="80" height="60" rx="6" fill="none" stroke="var(--text-primary)" strokeWidth="3" />
+                                <rect x="10" y="10" width="80" height="15" rx="6" fill="var(--border-color)" />
+                                <circle cx="16" cy="17" r="2.5" fill="var(--text-muted)" />
+                                <circle cx="23" cy="17" r="2.5" fill="var(--text-muted)" />
+                                <circle cx="30" cy="17" r="2.5" fill="var(--text-muted)" />
+                                <rect x="25" y="32" width="50" height="30" rx="3" fill="none" stroke="var(--text-primary)" strokeWidth="2.5" />
+                                <polygon points="46,40 58,47 46,54" fill="none" stroke="var(--accent-rose)" strokeWidth="2.5" strokeLinejoin="round" />
+                                <line x1="16" y1="67" x2="35" y2="67" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="16" y1="72" x2="45" y2="72" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" />
+                              </svg>
+                            </div>
+                            <div style={{ width: "100%", height: "1px", background: "var(--border-color)", margin: "10px 0" }}></div>
+                            <span style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-primary)" }}>Livebooks</span>
+                          </div>
 
-                      {/* Announcements */}
-                      <div className="glass-panel" style={styles.announcementCard}>
-                        <h3 style={{ ...styles.cardTitle, borderBottom: "1px solid var(--border-color)", paddingBottom: "12px", marginBottom: "15px" }}>📢 Announcements</h3>
-                        <div style={styles.announcementItem}>
-                          <span style={styles.announcementBadge}>Platform Upgrade</span>
-                          <p style={styles.announcementText}>
-                            <strong>Secure Exam Runner active:</strong> The static evaluation workspace is fully functional. Please do not close windows during tests.
-                          </p>
-                          <span style={styles.announcementDate}>Active</span>
-                        </div>
-                        <div style={{ ...styles.announcementItem, borderBottom: "none" }}>
-                          <span style={{ ...styles.announcementBadge, background: "rgba(168,85,247,0.15)", color: "var(--accent-secondary)" }}>Certificates</span>
-                          <p style={styles.announcementText}>
-                            Pass evaluations with score grade above 70% to instantly claim achievement diplomas in the Certificate vault.
-                          </p>
-                          <span style={styles.announcementDate}>Active</span>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* VIEW 2: DOMAIN DIRECTORY */}
+                  {deskView === "directory" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                      
+                      {/* Navigation Header */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          onClick={() => setDeskView("launchpad")}
+                          style={{ padding: "8px 16px", fontSize: "0.9rem" }}
+                        >
+                          ← Back to Launchpad
+                        </button>
+                        <div style={{ textAlign: "right" }}>
+                          <span style={styles.weekCompletedBadge}>New Phase upgraded</span>
+                        </div>
+                      </div>
+
+                      {/* Header Title */}
+                      <div style={{ marginBottom: "10px" }}>
+                        <h2 style={{ fontSize: "1.8rem", fontWeight: 800 }}>Browse Curriculum Domains</h2>
+                        <p style={{ color: "var(--text-secondary)", fontSize: "1.05rem", marginTop: "4px" }}>
+                          *We’re stepping into a bigger, better, and more advanced phase*. Explore all updated syllabus documents.
+                        </p>
+                      </div>
+
+                      {/* Search and Filters Bar */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", gap: "12px", width: "100%" }}>
+                          <div style={{ flex: 1, position: "relative" }}>
+                            <input 
+                              type="text" 
+                              placeholder="Search syllabus domains... (Ctrl K)" 
+                              className="form-input"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              style={{ paddingLeft: "45px" }}
+                            />
+                            <span style={{ position: "absolute", left: "16px", top: "14px", color: "var(--text-muted)", fontSize: "1.1rem" }}>🔍</span>
+                          </div>
+                        </div>
+
+                        {/* Category filter list */}
+                        <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", width: "100%" }}>
+                          <button 
+                            className={`btn ${selectedCategoryFilter === "All" ? "btn-primary" : "btn-secondary"}`}
+                            onClick={() => setSelectedCategoryFilter("All")}
+                            style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                          >
+                            All Categories
+                          </button>
+                          {Object.keys(CATEGORIZED_DOMAINS).map((cat) => (
+                            <button
+                              key={cat}
+                              className={`btn ${selectedCategoryFilter === cat ? "btn-primary" : "btn-secondary"}`}
+                              onClick={() => setSelectedCategoryFilter(cat)}
+                              style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                            >
+                              {cat.replace(" Domains", "")}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Domains Grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
+                        {(() => {
+                          const domainsToRender = [];
+                          Object.entries(CATEGORIZED_DOMAINS).forEach(([catName, list]) => {
+                            if (selectedCategoryFilter !== "All" && selectedCategoryFilter !== catName) return;
+                            list.forEach((domain) => {
+                              if (searchQuery && !domain.toLowerCase().includes(searchQuery.toLowerCase())) return;
+                              domainsToRender.push({ name: domain, category: catName });
+                            });
+                          });
+
+                          if (domainsToRender.length === 0) {
+                            return (
+                              <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+                                No syllabus domains match your current search parameters.
+                              </div>
+                            );
+                          }
+
+                          return domainsToRender.map((domain, idx) => {
+                            // Find icon based on category
+                            let icon = "💻";
+                            if (domain.category.includes("ECE")) icon = "⚡";
+                            else if (domain.category.includes("Mechanical")) icon = "⚙️";
+                            else if (domain.category.includes("Civil")) icon = "🏗️";
+                            else if (domain.category.includes("Aeronautical")) icon = "🛸";
+                            else if (domain.category.includes("Management")) icon = "📈";
+                            else if (domain.category.includes("Bio")) icon = "🧬";
+                            else if (domain.category.includes("Food")) icon = "🍎";
+                            else if (domain.category.includes("Nursing")) icon = "🩺";
+                            else if (domain.category.includes("Other")) icon = "🏆";
+
+                            const isSelected = selectedDomainName === domain.name;
+
+                            return (
+                              <div 
+                                key={idx} 
+                                className="glass-panel glass-panel-hover" 
+                                style={{ 
+                                  padding: "24px", 
+                                  cursor: "pointer", 
+                                  border: isSelected ? "2px solid var(--accent-primary)" : "1px solid var(--border-color)",
+                                  display: "flex", 
+                                  flexDirection: "column", 
+                                  justifyContent: "space-between",
+                                  minHeight: "180px"
+                                }}
+                                onClick={() => {
+                                  setSelectedDomainName(domain.name);
+                                  setDeskView("curriculum");
+                                }}
+                              >
+                                <div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                                    <span style={{ fontSize: "1.8rem" }}>{icon}</span>
+                                    <span style={{ fontSize: "0.75rem", background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: "10px", border: "1px solid var(--border-color)", color: "var(--text-secondary)" }}>
+                                      {domain.category.replace(" Domains", "")}
+                                    </span>
+                                  </div>
+                                  <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", lineHeight: "1.4" }}>
+                                    {domain.name}
+                                  </h4>
+                                </div>
+                                <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                                  <span>💎 3 | 📂 0 | 📚 33</span>
+                                  <span style={{ color: "var(--accent-emerald)", fontWeight: 600 }}>100% Core</span>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VIEW 3: TIMELINE CURRICULUM OVERVIEW */}
+                  {deskView === "curriculum" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                      
+                      {/* Breadcrumbs Navigation */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          onClick={() => setDeskView("directory")}
+                          style={{ padding: "8px 16px", fontSize: "0.9rem" }}
+                        >
+                          ← Browse Domains
+                        </button>
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
+                          Syllabus / {selectedDomainName}
+                        </span>
+                      </div>
+
+                      {/* Course Title Header (as shown in img 3) */}
+                      <div className="glass-panel" style={{ padding: "30px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "20px" }}>
+                        <div style={{ flex: 1, minWidth: "280px" }}>
+                          <span style={{ fontSize: "0.8rem", background: "rgba(99, 102, 241, 0.1)", color: "var(--accent-primary)", padding: "4px 10px", borderRadius: "12px", fontWeight: 600 }}>Domain Curriculum</span>
+                          <h2 style={{ fontSize: "2rem", fontWeight: 800, marginTop: "8px", color: "var(--text-primary)" }}>{selectedDomainName}</h2>
+                          <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginTop: "6px", lineHeight: "1.4" }}>
+                            {currentCourse.tagline}
+                          </p>
+                        </div>
+                        
+                        {/* Dynamic Progress indicator (from img 3) */}
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+                          <div style={{ display: "flex", gap: "15px", fontSize: "0.85rem" }}>
+                            <span style={{ color: "var(--text-muted)" }}>{quizPercentage}% Completed</span>
+                            <span style={{ color: "var(--accent-cyan)", fontWeight: 600 }}>65% Mastery</span>
+                          </div>
+                          
+                          {/* Segmented green progress bar */}
+                          <div style={{ display: "flex", gap: "2px" }}>
+                            {Array.from({ length: 20 }).map((_, idx) => {
+                              const activeSegments = Math.round((quizPercentage / 100) * 20);
+                              const isActive = idx < activeSegments;
+                              return (
+                                <div 
+                                  key={idx} 
+                                  style={{
+                                    width: "8px", 
+                                    height: "12px", 
+                                    background: isActive ? "linear-gradient(to bottom, #10b981, #059669)" : "rgba(255,255,255,0.06)",
+                                    borderRadius: "1px"
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Course Tabs (Learning Path, Sessions, Assessments, About) */}
+                      <div style={{ borderBottom: "1px solid var(--border-color)", display: "flex", gap: "24px", marginTop: "10px" }}>
+                        {[
+                          { id: "path", label: "Learning Path" },
+                          { id: "sessions", label: "Sessions" },
+                          { id: "assessments", label: "Assessments" },
+                          { id: "about", label: "About" }
+                        ].map((t) => (
+                          <button
+                            key={t.id}
+                            style={{
+                              padding: "12px 6px",
+                              border: "none",
+                              background: "none",
+                              fontSize: "1rem",
+                              fontWeight: 700,
+                              color: curriculumTab === t.id ? "var(--text-primary)" : "var(--text-secondary)",
+                              borderBottom: curriculumTab === t.id ? "3px solid var(--accent-primary)" : "3px solid transparent",
+                              cursor: "pointer",
+                              outline: "none",
+                              transition: "all 0.2s ease"
+                            }}
+                            onClick={() => setCurriculumTab(t.id)}
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Tab contents */}
+                      {curriculumTab === "path" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "30px", marginTop: "10px" }}>
+                          
+                          {/* Timeline layout (as in img 3) */}
+                          {currentCourse.modules.map((mod, modIdx) => (
+                            <div key={modIdx} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                              
+                              {/* Module Tag Header */}
+                              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-color)", padding: "12px 20px", borderRadius: "var(--border-radius-md)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div>
+                                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Module {modIdx + 1}</span>
+                                  <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)" }}>{mod.title}</h4>
+                                </div>
+                                <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>2 Lessons</span>
+                              </div>
+
+                              {/* timeline nodes */}
+                              <div style={{ display: "flex", flexDirection: "column", position: "relative", paddingLeft: "40px" }}>
+                                {/* Vertical connection line */}
+                                <div style={{ position: "absolute", left: "19px", top: "10px", bottom: "10px", width: "2px", borderLeft: "2px dashed var(--border-color)" }}></div>
+                                
+                                {mod.topics.map((top, topIdx) => {
+                                  const topicKey = `${modIdx + 1}.${topIdx + 1}`;
+                                  const isTopicCompleted = quizProgress[topicKey];
+
+                                  return (
+                                    <div 
+                                      key={topIdx} 
+                                      className="glass-panel glass-panel-hover"
+                                      style={{ 
+                                        padding: "20px 24px", 
+                                        marginBottom: "16px", 
+                                        position: "relative",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                      }}
+                                    >
+                                      {/* Left side node dot indicator */}
+                                      <div 
+                                        style={{
+                                          position: "absolute",
+                                          left: "-31px",
+                                          top: "50%",
+                                          transform: "translateY(-50%)",
+                                          width: "24px",
+                                          height: "24px",
+                                          borderRadius: "4px",
+                                          background: isTopicCompleted ? "var(--accent-emerald)" : "var(--border-color)",
+                                          border: "1.5px solid var(--bg-primary)",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          fontSize: "0.7rem",
+                                          fontWeight: 800,
+                                          color: "#fff",
+                                          zIndex: 2
+                                        }}
+                                      >
+                                        {topicKey}
+                                      </div>
+
+                                      <div style={{ flex: 1, paddingRight: "20px" }}>
+                                        <h5 style={{ fontSize: "1rem", fontWeight: 700, color: isTopicCompleted ? "var(--text-primary)" : "var(--text-secondary)", marginBottom: "4px" }}>
+                                          {top.title}
+                                        </h5>
+                                        <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: "1.4" }}>
+                                          {top.description}
+                                        </p>
+                                      </div>
+
+                                      {/* Blue Arrow Link to topic (from img 3) */}
+                                      <button 
+                                        className="btn btn-secondary"
+                                        onClick={() => {
+                                          setActiveModuleIndex(modIdx);
+                                          setActiveTopicIndex(topIdx);
+                                          setDeskView("sidebar");
+                                        }}
+                                        style={{ 
+                                          width: "36px", 
+                                          height: "36px", 
+                                          padding: 0, 
+                                          borderRadius: "50%", 
+                                          background: "rgba(99, 102, 241, 0.08)",
+                                          color: "var(--accent-primary)",
+                                          borderColor: "transparent",
+                                          fontSize: "1.2rem"
+                                        }}
+                                      >
+                                        →
+                                      </button>
+
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                            </div>
+                          ))}
+
+                        </div>
+                      )}
+
+                      {curriculumTab === "sessions" && (
+                        <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-muted)" }}>
+                          <span style={{ fontSize: "3rem" }}>📅</span>
+                          <h4 style={{ fontWeight: 700, color: "var(--text-primary)", marginTop: "15px", marginBottom: "8px" }}>Live Webinars Scheduled</h4>
+                          <p style={{ fontSize: "0.9rem" }}>No session bookings today. Check back on Monday for upcoming industry webinars.</p>
+                        </div>
+                      )}
+
+                      {curriculumTab === "assessments" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "10px" }}>
+                          <div className="glass-panel" style={{ padding: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <span style={styles.weekCompletedBadge}>Standard Evaluation</span>
+                              <h4 style={{ fontSize: "1.1rem", fontWeight: 700, marginTop: "6px" }}>Domain Comprehensive MCQ Challenge</h4>
+                              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "2px" }}>Limit: 10 Mins | Passing Rate: 70%</p>
+                            </div>
+                            <button className="btn btn-primary" onClick={() => setActiveTab("exams")}>Go to Exams</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {curriculumTab === "about" && (
+                        <div className="glass-panel" style={{ padding: "30px", marginTop: "10px", lineHeight: "1.6" }}>
+                          <h4 style={{ fontWeight: 700, marginBottom: "12px" }}>Curriculum Architecture Overview</h4>
+                          <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginBottom: "15px" }}>
+                            This upgraded domain certification is engineered in alignment with current industry trends and upcoming corporate technology stack standards.
+                          </p>
+                          <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem" }}>
+                            Over the course of 4 core modules, students will develop practical skills, review revision guides, pass concept checkpoint quizzes, and demonstrate capability using standard evaluative projects.
+                          </p>
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+
+                  {/* VIEW 4: SIDEBAR TOPIC EXPLORER */}
+                  {deskView === "sidebar" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                      {/* Explorer header bar */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          onClick={() => setDeskView("curriculum")}
+                          style={{ padding: "6px 12px", fontSize: "0.85rem" }}
+                        >
+                          ← Back to path
+                        </button>
+                        <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
+                          {selectedDomainName} / Module {activeModuleIndex + 1}
+                        </span>
+                      </div>
+
+                      {/* Main Dual Explorer layout (from img 4) */}
+                      <div style={{ display: "flex", gap: "24px", minHeight: "500px", flexWrap: "wrap" }}>
+                        
+                        {/* LEFT SIDEBAR: Topic navigation list */}
+                        <div className="glass-panel" style={{ width: "280px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0 }}>
+                          <h4 style={{ fontSize: "0.9rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)", paddingBottom: "10px", borderBottom: "1px solid var(--border-color)" }}>
+                            📖 learning path
+                          </h4>
+                          
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
+                            {currentCourse.modules.map((mod, modIdx) => (
+                              <div key={modIdx} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 700 }}>
+                                  Module {modIdx + 1}
+                                </span>
+                                
+                                {mod.topics.map((top, topIdx) => {
+                                  const topicKey = `${modIdx + 1}.${topIdx + 1}`;
+                                  const isSelected = activeModuleIndex === modIdx && activeTopicIndex === topIdx;
+                                  const isTopicCompleted = quizProgress[topicKey];
+
+                                  return (
+                                    <div
+                                      key={topIdx}
+                                      onClick={() => {
+                                        setActiveModuleIndex(modIdx);
+                                        setActiveTopicIndex(topIdx);
+                                      }}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "10px",
+                                        padding: "10px 12px",
+                                        borderRadius: "var(--border-radius-sm)",
+                                        background: isSelected ? "rgba(99, 102, 241, 0.08)" : "transparent",
+                                        cursor: "pointer",
+                                        border: isSelected ? "1px solid rgba(99, 102, 241, 0.2)" : "1px solid transparent"
+                                      }}
+                                    >
+                                      {/* Completion circle */}
+                                      <div style={{
+                                        width: "20px",
+                                        height: "20px",
+                                        borderRadius: "50%",
+                                        background: isTopicCompleted ? "var(--accent-emerald)" : isSelected ? "rgba(255,255,255,0.02)" : "transparent",
+                                        border: isTopicCompleted ? "none" : "1.5px solid var(--border-color)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        fontSize: "0.7rem",
+                                        fontWeight: 800,
+                                        color: isTopicCompleted ? "#fff" : "var(--text-muted)"
+                                      }}>
+                                        {topicKey}
+                                      </div>
+                                      <span style={{ 
+                                        fontSize: "0.85rem", 
+                                        fontWeight: isSelected ? 700 : 500,
+                                        color: isSelected ? "var(--accent-primary)" : "var(--text-secondary)",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        flex: 1
+                                      }}>
+                                        {top.title}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* RIGHT MAIN PANEL: Study Cards (as shown in img 4) */}
+                        <div style={{ flex: 1, minWidth: "300px", display: "flex", flexDirection: "column", gap: "24px" }}>
+                          
+                          {/* Breadcrumb title */}
+                          <div>
+                            <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                              &lt; {currentCourse.modules[activeModuleIndex].title}
+                            </span>
+                            <h3 style={{ fontSize: "1.6rem", fontWeight: 800, marginTop: "4px" }}>
+                              {currentCourse.modules[activeModuleIndex].topics[activeTopicIndex].title}
+                            </h3>
+                          </div>
+
+                          {/* Interactive material cards */}
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "24px" }}>
+                            
+                            {/* Card 1: Lesson (cream/light-orange box) */}
+                            <div 
+                              className="glass-panel" 
+                              onClick={() => {
+                                setReadingMode("lesson");
+                                setDeskView("reader");
+                              }}
+                              style={{ 
+                                padding: "40px 30px", 
+                                display: "flex", 
+                                flexDirection: "column", 
+                                alignItems: "center", 
+                                justifyContent: "center",
+                                textAlign: "center",
+                                cursor: "pointer",
+                                border: "1px solid rgba(249, 115, 22, 0.15)",
+                                background: theme === "light" ? "rgba(255, 237, 213, 0.5)" : "rgba(249, 115, 22, 0.05)",
+                                borderRadius: "var(--border-radius-lg)",
+                                transition: "all 0.3s ease"
+                              }}
+                            >
+                              {/* Vector laptop drawing */}
+                              <svg viewBox="0 0 120 90" style={{ width: "120px", height: "90px", marginBottom: "20px" }}>
+                                <rect x="20" y="15" width="80" height="50" rx="5" fill="none" stroke="var(--accent-rose)" strokeWidth="3" />
+                                <rect x="25" y="20" width="70" height="32" fill="rgba(239, 68, 68, 0.05)" />
+                                <line x1="32" y1="29" x2="52" y2="29" stroke="var(--accent-rose)" strokeWidth="3" strokeLinecap="round" />
+                                <line x1="32" y1="37" x2="88" y2="37" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" />
+                                <line x1="32" y1="45" x2="72" y2="45" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" />
+                                <line x1="12" y1="65" x2="108" y2="65" stroke="var(--text-primary)" strokeWidth="4" strokeLinecap="round" />
+                                <rect x="52" y="65" width="16" height="4" fill="var(--text-primary)" />
+                              </svg>
+                              
+                              <h4 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--accent-rose)", marginTop: "10px" }}>Lesson</h4>
+                            </div>
+
+                            {/* Card 2: Revision Notes (light-blue/purple box) */}
+                            <div 
+                              className="glass-panel" 
+                              onClick={() => {
+                                setReadingMode("notes");
+                                setDeskView("reader");
+                              }}
+                              style={{ 
+                                padding: "40px 30px", 
+                                display: "flex", 
+                                flexDirection: "column", 
+                                alignItems: "center", 
+                                justifyContent: "center",
+                                textAlign: "center",
+                                cursor: "pointer",
+                                border: "1px solid rgba(99, 102, 241, 0.15)",
+                                background: theme === "light" ? "rgba(238, 242, 255, 0.5)" : "rgba(99, 102, 241, 0.05)",
+                                borderRadius: "var(--border-radius-lg)",
+                                transition: "all 0.3s ease"
+                              }}
+                            >
+                              {/* Vector document folder drawing */}
+                              <svg viewBox="0 0 120 90" style={{ width: "120px", height: "90px", marginBottom: "20px" }}>
+                                <rect x="35" y="15" width="50" height="60" rx="5" fill="none" stroke="var(--accent-primary)" strokeWidth="3" />
+                                <line x1="45" y1="30" x2="75" y2="30" stroke="var(--accent-primary)" strokeWidth="2.5" strokeLinecap="round" />
+                                <line x1="45" y1="40" x2="70" y2="40" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="45" y1="50" x2="75" y2="50" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="45" y1="60" x2="65" y2="60" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" />
+                                <path d="M56,7 C59,2 65,2 68,7 L68,20 C65,25 59,25 56,20 Z" fill="none" stroke="var(--accent-secondary)" strokeWidth="2" />
+                              </svg>
+                              
+                              <h4 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--accent-primary)", marginTop: "10px" }}>Revision Notes</h4>
+                            </div>
+
+                          </div>
+
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VIEW 5: INTERACTIVE STUDY CONTENT READER */}
+                  {deskView === "reader" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "20px", position: "relative" }}>
+                      
+                      {/* Top reading progress line (from img 5) */}
+                      <div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.06)", position: "absolute", top: "-20px", left: 0, right: 0 }}>
+                        <div style={{ width: "75%", height: "100%", background: "var(--accent-primary)" }}></div>
+                      </div>
+
+                      {/* Header controller bar */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
+                        <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 700 }}>
+                          Reading Study Material
+                        </span>
+                        
+                        {/* Circular Close Button (from img 5) */}
+                        <button 
+                          onClick={() => setDeskView("sidebar")}
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "50%",
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1.5px solid var(--border-color)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            color: "var(--text-secondary)",
+                            outline: "none",
+                            fontWeight: "bold",
+                            transition: "all 0.2s ease"
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Content Reader Pane */}
+                      <div className="glass-panel animate-fade-in" style={{ padding: "40px", display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "800px", margin: "0 auto", width: "100%" }}>
+                        
+                        {/* Badge box (from img 5) */}
+                        <div style={{ 
+                          width: "36px", 
+                          height: "36px", 
+                          background: "var(--accent-emerald)", 
+                          borderRadius: "4px", 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          color: "#fff", 
+                          fontWeight: 800,
+                          fontSize: "0.95rem"
+                        }}>
+                          {activeModuleIndex + 1}.{activeTopicIndex + 1}
+                        </div>
+
+                        {/* Title text */}
+                        <h2 style={{ fontSize: "2rem", fontWeight: 800, marginTop: "20px", marginBottom: "30px", textAlign: "center" }}>
+                          {currentCourse.modules[activeModuleIndex].topics[activeTopicIndex].title}
+                        </h2>
+
+                        {/* Centered graphics/quote banner (from img 5) */}
+                        <div 
+                          className="glass-panel" 
+                          style={{ 
+                            width: "100%", 
+                            maxWidth: "450px", 
+                            background: "radial-gradient(circle at center, rgba(168, 85, 247, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%)", 
+                            padding: "40px", 
+                            borderRadius: "var(--border-radius-lg)",
+                            textAlign: "center",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            border: "1px solid rgba(99, 102, 241, 0.2)",
+                            marginBottom: "35px"
+                          }}
+                        >
+                          <span style={{ fontSize: "3rem", color: "var(--accent-rose)", display: "block", marginBottom: "15px", height: "30px", fontFamily: "Georgia, serif" }}>“</span>
+                          <p style={{ fontStyle: "italic", fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", lineHeight: "1.5", marginBottom: "15px" }}>
+                            {currentCourse.modules[activeModuleIndex].topics[activeTopicIndex].quote || "One sound idea is all that one needs to achieve success."}
+                          </p>
+                          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+                            Credits: {currentCourse.modules[activeModuleIndex].topics[activeTopicIndex].quoteCredits || "Pinterest"}
+                          </span>
+                        </div>
+
+                        {/* Paragraph reading contents */}
+                        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "20px", color: "var(--text-secondary)", fontSize: "1.05rem", lineHeight: "1.7", textAlign: "left" }}>
+                          {readingMode === "lesson" ? (
+                            <>
+                              <p>{currentCourse.modules[activeModuleIndex].topics[activeTopicIndex].lesson}</p>
+                              <p>Understanding these aspects allows you to make scalable architectural designs, keeping overall platform parameters clean. Practice applying these parameters in isolated tests before deploying full files in production.</p>
+                            </>
+                          ) : (
+                            <>
+                              <h4 style={{ fontWeight: 700, color: "var(--text-primary)" }}>Key Cheat Sheet Checkpoints:</h4>
+                              <p style={{ whiteSpace: "pre-line" }}>{currentCourse.modules[activeModuleIndex].topics[activeTopicIndex].notes}</p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Action buttons at bottom */}
+                        <div style={{ display: "flex", gap: "16px", marginTop: "40px", width: "100%" }}>
+                          <button 
+                            className="btn btn-secondary"
+                            onClick={() => setDeskView("sidebar")}
+                            style={{ flex: 1 }}
+                          >
+                            Close Reader
+                          </button>
+                          
+                          <button 
+                            className="btn btn-primary"
+                            onClick={() => {
+                              const topicKey = `${activeModuleIndex + 1}.${activeTopicIndex + 1}`;
+                              const updatedProgress = { ...quizProgress, [topicKey]: true };
+                              
+                              // Save progress to local state & localStorage
+                              setQuizProgress(updatedProgress);
+                              const email = studentInfo.email;
+                              localStorage.setItem(`pieenear_quiz_progress_${email.toLowerCase()}`, JSON.stringify(updatedProgress));
+                              
+                              showToast(`Checked off topic ${topicKey} as completed!`, "success");
+                              setDeskView("sidebar");
+                            }}
+                            style={{ flex: 1 }}
+                          >
+                            Mark as Completed ✔
+                          </button>
+                        </div>
+
+                      </div>
+
+                    </div>
+                  )}
+
                 </div>
               );
             })()}
@@ -1821,557 +2663,395 @@ const styles = {
   }
 };
 
-const courseData = {
-  "Web Development": {
-    tagline: "Master modern full-stack web engineering, from layout design to interactive client-side routing and performance optimization.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Semantic HTML5, CSS Flexbox & CSS Grid",
-        topics: [
-          "HTML5 semantic structure elements (header, footer, nav, article, section)",
-          "Flexbox 1D layout alignments, justification, and dynamic wraps",
-          "Grid 2D layouts using templates, areas, autofill, and grid gaps"
-        ],
-        readings: "Web page structures rely on semantic HTML5 tags for accessibility and SEO. For layout flow, use Flexbox when aligning items along a single axis (row or column). Use CSS Grid when creating complex multi-dimensional page structures. Avoid legacy floats and tables for general layout design.",
-        quiz: {
-          question: "Which HTML5 semantic element is most suitable for containing site navigation links?",
-          options: ["<section>", "<article>", "<nav>", "<aside>"],
-          answer: "<nav>",
-          explanation: "The <nav> element is designed specifically for primary navigation links, enhancing accessibility and SEO indexing."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: Advanced JavaScript (ES6+), DOM Controls & Events",
-        topics: [
-          "Block scoped variables (let, const) and arrow functions",
-          "Array methods (.map(), .filter(), .reduce())",
-          "Asynchronous flow using Promises, async/await, and Fetch API"
-        ],
-        readings: "Modern JavaScript uses ES6 features like block scoping, arrow functions, and array helper functions. Use filter() to build arrays matching conditions, and map() to transform values. Wrap network requests in async/await blocks to gracefully handle success and failures.",
-        quiz: {
-          question: "Which array method creates a new array with all elements that pass the test implemented by the provided function?",
-          options: [".map()", ".filter()", ".reduce()", ".forEach()"],
-          answer: ".filter()",
-          explanation: "The .filter() method executes a test callback on each element and returns a new array containing only the elements that returned true."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: React.js Component Architecture & Hooks",
-        topics: [
-          "JSX elements, props validation, and state reactivity",
-          "Component lifecycle mapping using useState and useEffect hooks",
-          "Lifting state up and handling user input forms"
-        ],
-        readings: "React builds user interfaces by combining reusable component pieces. State represents internal component memory, managed via useState. Use useEffect to synchronize your components with external systems, like APIs, tracking state changes via the dependency array.",
-        quiz: {
-          question: "Which hook is used to perform side effects, such as API fetching or page subscriptions, in React functional components?",
-          options: ["useState", "useContext", "useEffect", "useRef"],
-          answer: "useEffect",
-          explanation: "The useEffect hook lets you run side-effects after rendering, like data fetching, manual DOM updates, or setting up intervals."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: Production Deployment & Performance Tuning",
-        topics: [
-          "Next.js build compilation and static site generation",
-          "Enabling CORS headers and securing API endpoints",
-          "Image optimizations and component lazy loading"
-        ],
-        readings: "Before shipping web apps, compile source code into optimal bundles. Use Next.js optimizations like next/image and code-splitting (lazy loading) to speed up initial loads. Secure your backend routes by properly restricting Cross-Origin Resource Sharing (CORS) access headers.",
-        quiz: {
-          question: "Which HTTP header is typically used to enable Cross-Origin Resource Sharing (CORS)?",
-          options: ["Access-Control-Allow-Origin", "Content-Security-Policy", "X-Frame-Options", "Strict-Transport-Security"],
-          answer: "Access-Control-Allow-Origin",
-          explanation: "The Access-Control-Allow-Origin header is returned by servers to allow browsers to access resources from authorized origin domains."
-        }
-      }
-    ]
-  },
-  "App Development": {
-    tagline: "Build native and cross-platform mobile applications for iOS and Android with modern user experience principles.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Mobile Ecosystems & Native Architectures",
-        topics: [
-          "Android Runtime (ART) vs iOS Cocoa Touch system layers",
-          "Native development (Kotlin/Swift) vs Cross-Platform hybrid approaches",
-          "Mobile design considerations: battery life, background threads, and offline sync"
-        ],
-        readings: "Mobile operating systems prioritize energy efficiency and resource constraints. Swift and Kotlin provide high-performance native binaries for iOS and Android. Cross-platform frameworks translate single codebases into native layouts. Always delegate long-running tasks off the main UI thread.",
-        quiz: {
-          question: "Which operating system uses Cocoa Touch framework as its core user interface framework?",
-          options: ["Android", "iOS", "Windows Phone", "Tizen"],
-          answer: "iOS",
-          explanation: "Cocoa Touch is the application development framework for building user interfaces on Apple's iOS device line."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: React Native Core Widgets & Flexbox Layouts",
-        topics: [
-          "Core elements: View, Text, Image, and TextInput",
-          "Custom stylesheet styling constraints and layout engines",
-          "Dynamic scrolling lists using ScrollView vs FlatList components"
-        ],
-        readings: "React Native translates React components into native mobile views. Unlike web browsers, mobile styling uses a subset of Flexbox where the default layout direction is column. For long lists, always prefer FlatList as it recycles view cells to prevent high memory usage.",
-        quiz: {
-          question: "What component is used in React Native to scroll a generic list of items efficiently without loading the entire list into memory?",
-          options: ["ScrollView", "FlatList", "ListView", "SectionList"],
-          answer: "FlatList",
-          explanation: "FlatList renders items lazily, creating UI rows only as they become visible on screen to conserve device RAM."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: State Management & Mobile App Navigation",
-        topics: [
-          "React Navigation architecture (Stack, Tabs, and Drawer navigators)",
-          "Passing parameters across routing screens and navigation trees",
-          "Global state patterns inside mobile sandboxes"
-        ],
-        readings: "Navigation in mobile apps resembles stack-based transitions. Use StackNavigator to push screens onto a history list, TabNavigator for persistent bottom bar tabs, and DrawerNavigator for slide-out menus. Keep navigation payloads clean of large data structures.",
-        quiz: {
-          question: "Which navigator in React Navigation is typically used for a drawer slide-out menu?",
-          options: ["StackNavigator", "TabNavigator", "DrawerNavigator", "SwitchNavigator"],
-          answer: "DrawerNavigator",
-          explanation: "DrawerNavigator generates a menu drawer that slides in from the side of the screen when swiped or triggered."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: Deployment, Code Signing & App Store Publishing",
-        topics: [
-          "Configuring Info.plist (iOS) and AndroidManifest.xml details",
-          "Certificates, provisioning profiles, and code signing steps",
-          "Over-the-Air (OTA) updates and app store bundle releases"
-        ],
-        readings: "Publishing mobile apps requires strict code verification. Configure AndroidManifest.xml for permissions and Info.plist for iOS capabilities. Register certificates and signing credentials with Google and Apple before building APK/IPA bundles.",
-        quiz: {
-          question: "Which configuration file in iOS apps contains metadata like bundle identifiers and required device permissions?",
-          options: ["AndroidManifest.xml", "App.js", "Info.plist", "build.gradle"],
-          answer: "Info.plist",
-          explanation: "Info.plist (Information Property List) is a structured key-value XML file containing foundational configurations for iOS apps."
-        }
-      }
-    ]
-  },
-  "UI ux": {
-    tagline: "Understand user-centric design methodologies, wireframing tools, typography systems, and prototyping methods.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Fundamentals of Design Thinking (Empathize & Define)",
-        topics: [
-          "The 5 steps of Design Thinking (Empathize, Define, Ideate, Prototype, Test)",
-          "Building user personas, journey mapping, and empathy tables",
-          "Formulating clear, user-focused problem statements"
-        ],
-        readings: "User Experience (UX) design is grounded in empathy. The Design Thinking process starts with understanding user pain points directly through observation and interviews. In the Define phase, designers compile research findings into structured target personas and actionable problem statements.",
-        quiz: {
-          question: "What is the primary goal of the Empathize phase in the Design Thinking framework?",
-          options: ["Create rapid physical models", "Observe and understand user feelings and needs", "Define the core problem statement", "Test final designs with users"],
-          answer: "Observe and understand user feelings and needs",
-          explanation: "Empathize focuses on researching user needs, observing habits, and understanding motivations without assuming pre-conceived biases."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: Wireframing Layouts & Figma Tool Basics",
-        topics: [
-          "Low-fidelity sketches vs high-fidelity digital mockups",
-          "Figma basics: frames, shapes, boolean operations, and groups",
-          "Designing layouts dynamically using Figma Auto-Layout"
-        ],
-        readings: "Figma is the industry-standard collaborative vector design tool. Begin layouts with low-fidelity sketches before adding color or styles. In Figma, use Auto Layout to make elements responsive. Auto Layout dynamically shifts alignments when component sizes or text contents change.",
-        quiz: {
-          question: "Which Figma layout feature automatically handles dynamic padding and row flow when text labels resize?",
-          options: ["Smart Animate", "Auto Layout", "Component Sets", "Interactive Components"],
-          answer: "Auto Layout",
-          explanation: "Auto Layout is a property you can add to frames that lets you create designs that grow or shrink dynamically."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: Color Theory, Visual Hierarchy & Typography Systems",
-        topics: [
-          "Color palettes (Monochromatic, Analogous, Complementary) and meanings",
-          "Visual contrast guidelines, alignment grids, and spacing systems",
-          "Selecting and pairing font families for web and mobile platforms"
-        ],
-        readings: "Visual design guides a user's attention through a interface. Establish clear visual hierarchies using size contrast, weights, and color accents. Ensure color combinations meet accessibility contrast scores (WCAG) so text remains readable to all user demographics.",
-        quiz: {
-          question: "Which type of color palette uses colors that are adjacent to each other on the standard color wheel?",
-          options: ["Monochromatic", "Analogous", "Complementary", "Triadic"],
-          answer: "Analogous",
-          explanation: "Analogous color schemes use colors that sit next to each other on the color wheel, creating natural, harmonious layouts."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: Interactive Prototyping & Usability Evaluation",
-        topics: [
-          "Setting up interactive connections and animated state triggers",
-          "Running usability testing, session logs, and observing user blockages",
-          "Evaluating interfaces against Nielsen's 10 Usability Heuristics"
-        ],
-        readings: "Validate design assumptions before writing production code. Create interactive prototypes in Figma by linking button hotspots to target screens. Test prototype designs with actual users. Run heuristic evaluations to check for clear user feedback, undo controls, and consistency.",
-        quiz: {
-          question: "What is the primary purpose of conducting a design heuristic evaluation?",
-          options: ["Write CSS styling tokens", "Evaluate UI against established usability principles", "Conduct user surveys", "Run A/B code deployments"],
-          answer: "Evaluate UI against established usability principles",
-          explanation: "Heuristic evaluation checks an interface design against a list of recognized usability guidelines, like system visibility and error prevention."
-        }
-      }
-    ]
-  },
-  "AI/ML basic": {
-    tagline: "Explore data processing libraries, core supervised algorithms, unsupervised clustering, and neural network foundations.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Mathematical Foundations & Python Libraries",
-        topics: [
-          "Linear algebra, probability vectors, and matrix dimensions",
-          "NumPy arrays, slicing, broadcasting, and matrix operations",
-          "Pandas DataFrames: data cleaning, indexing, and aggregations"
-        ],
-        readings: "Artificial Intelligence relies on linear algebra, statistics, and programming. Python serves as the primary language due to its specialized library ecosystems. Use NumPy for high-performance matrix math, and Pandas to read, clean, and manipulate tabular data files.",
-        quiz: {
-          question: "Which library is primary used for data analysis and structures like DataFrames in Python?",
-          options: ["NumPy", "Pandas", "Matplotlib", "Scikit-Learn"],
-          answer: "Pandas",
-          explanation: "Pandas provides high-level data structures and manipulation functions designed to make data cleaning and analysis quick and easy."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: Supervised Learning (Regression & Trees)",
-        topics: [
-          "Linear regression formulas, cost functions, and Gradient Descent",
-          "Classification models: Logistic Regression and Decision Trees",
-          "Splitting datasets into training, validation, and test sections"
-        ],
-        readings: "Supervised learning models learn mappings from labeled inputs. Linear regression fits a line to continuous data by minimizing error margins. Decision Trees split data points sequentially based on descriptive features. Evaluate models by keeping test data separate.",
-        quiz: {
-          question: "In linear regression, what metric measures the proportion of variance in the dependent variable predictable from the independent variable?",
-          options: ["Mean Absolute Error", "R-squared", "Silhouette Score", "Gini Impurity"],
-          answer: "R-squared",
-          explanation: "R-squared (coefficient of determination) measures how well the regression model fits the variance in the target dataset."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: Unsupervised Learning (Clustering & Dimensionality)",
-        topics: [
-          "K-Means Clustering: centroids, distances, and selecting K",
-          "Dimensionality reduction with Principal Component Analysis (PCA)",
-          "Anomaly detection models and feature engineering methods"
-        ],
-        readings: "Unsupervised learning works on unlabeled datasets to find hidden patterns. K-Means groups data points around calculated centers. Principal Component Analysis (PCA) reduces the number of dimensions in large datasets while retaining maximum variance.",
-        quiz: {
-          question: "What is the primary purpose of Principal Component Analysis (PCA) in machine learning?",
-          options: ["Supervised Classification", "Dimensionality Reduction", "Clustering Outliers", "Hyperparameter Tuning"],
-          answer: "Dimensionality Reduction",
-          explanation: "PCA simplifies highly dimensional datasets into fewer main components, reducing computation costs while keeping essential patterns."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: Artificial Neural Networks & Deep Learning",
-        topics: [
-          "Perceptron architectures, weights, biases, and active layers",
-          "Activation functions: Sigmoid, Hyperbolic Tangent (Tanh), and ReLU",
-          "Backpropagation, loss optimizers, and neural training iterations"
-        ],
-        readings: "Deep learning models are built from stacked layer channels. A single node calculates weighted inputs, adds a bias, and passes the result through an activation function. Use Sigmoid for outputs representing probabilities, and ReLU for hidden layers to speed up gradient calculations.",
-        quiz: {
-          question: "Which activation function outputs values in the range [0, 1] and is commonly used for binary classification?",
-          options: ["ReLU", "Sigmoid", "Tanh", "Softmax"],
-          answer: "Sigmoid",
-          explanation: "The Sigmoid activation function maps any real-valued number into a value between 0 and 1, making it perfect for outputting probabilities."
-        }
-      }
-    ]
-  },
-  "System desgin basic": {
-    tagline: "Learn scaling models, load balancing, caching systems, database schemas, and message queues in backend engineering.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Scaling Principles & Server Architectures",
-        topics: [
-          "Vertical scaling (scaling up) vs Horizontal scaling (scaling out)",
-          "Designing stateful vs stateless application microservices",
-          "System characteristics: availability, throughput, and latencies"
-        ],
-        readings: "System design coordinates multiple compute instances. Vertical scaling adds CPU/RAM to one machine, reaching hardware limits. Horizontal scaling adds more machines, calling for stateless architectures where any node can process incoming requests.",
-        quiz: {
-          question: "What is horizontal scaling (scaling out)?",
-          options: ["Adding CPU and RAM resources to a single node", "Adding more server nodes to run in parallel", "Refactoring monolithic code into smaller functions", "Setting up a content delivery network"],
-          answer: "Adding more server nodes to run in parallel",
-          explanation: "Horizontal scaling scales out capacity by connecting multiple servers to a network pool, providing elastic availability."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: Load Balancing, Caches & CDN Deliveries",
-        topics: [
-          "Load balancers: Nginx, round-robin routes, and sticky sessions",
-          "Caching strategies (write-through, cache-aside) using Redis",
-          "Content Delivery Networks (CDNs) for static edge distribution"
-        ],
-        readings: "Speed up response cycles using caches. Load balancers distribute requests across servers to prevent bottlenecks. Use Redis as a cache-aside database layer for hot records. Distribute static assets globally at edge nodes using CDNs.",
-        quiz: {
-          question: "Which load balancing algorithm selects servers based on sequential distribution order?",
-          options: ["Least Connections", "IP Hash", "Round Robin", "Weighted Least Connections"],
-          answer: "Round Robin",
-          explanation: "Round Robin distributes incoming traffic in circular order, sending the next request to the next server in line."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: Databases, Sharding, Replication & CAP Theorem",
-        topics: [
-          "SQL vs NoSQL: schemas, indexes, joins, and scaling models",
-          "Database scaling: read replicas, primary-replica writes, and sharding",
-          "The CAP Theorem: Consistency, Availability, and Partition Tolerance"
-        ],
-        readings: "Databases organize application state. SQL databases guarantee transactional safety (ACID). NoSQL databases scale horizontally by relaxing constraints. The CAP Theorem proves that a partitioned network must trade off Consistency or Availability.",
-        quiz: {
-          question: "According to the CAP Theorem, in the presence of a network partition (P), what trade-off must a system make?",
-          options: ["Speed vs Reliability", "Consistency vs Availability", "Security vs Latency", "Sharding vs Replication"],
-          answer: "Consistency vs Availability",
-          explanation: "The CAP Theorem states that in the event of a network partition, a distributed system must choose between Consistency or Availability."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: Message Queues & Fault Tolerance Patterns",
-        topics: [
-          "Asynchronous messaging: RabbitMQ, Apache Kafka, and pub-sub layers",
-          "System resilience: circuit breakers, retry backoffs, and rate limiting",
-          "Monitoring systems, heartbeat nodes, and disaster recovery processes"
-        ],
-        readings: "Decouple microservices using async message queues like RabbitMQ or Kafka. This lets slow tasks run in the background. Protect system health using rate limiters and circuit breakers, which temporarily cut off failing dependencies to prevent cascade crashes.",
-        quiz: {
-          question: "Which component acts as a buffer to decouple service communication in event-driven systems?",
-          options: ["API Gateway", "Message Broker (e.g. RabbitMQ)", "Distributed Cache", "Reverse Proxy"],
-          answer: "Message Broker (e.g. RabbitMQ)",
-          explanation: "Message brokers act as middle layers that accept, store, and deliver messages asynchronously between distinct services."
-        }
-      }
-    ]
-  },
-  "product mangement": {
-    tagline: "Discover product development lifecycles, Agile and Scrum methods, RICE frameworks, and analytics metrics.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Product Lifecycle & Vision Definition",
-        topics: [
-          "Product Lifecycle stages: Introduction, Growth, Maturity, Decline",
-          "Defining target segments, user problem spaces, and core value propositions",
-          "Structuring Minimum Viable Product (MVP) feature scopes"
-        ],
-        readings: "Product managers coordinate cross-functional teams to build solutions. The product lifecycle tracks a product from introduction to decline. Focus initially on an MVP: the simplest set of features needed to validate a concept with users.",
-        quiz: {
-          question: "What stage of the Product Lifecycle is focused on scaling customer acquisition and refining the product?",
-          options: ["Introduction", "Growth", "Maturity", "Decline"],
-          answer: "Growth",
-          explanation: "The Growth phase is characterized by rapid user acquisition, feature expansion, and scaling marketing and engineering operations."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: Agile Methodologies & Scrum Frameworks",
-        topics: [
-          "Agile manifesto principles vs traditional waterfall development",
-          "Scrum roles: Product Owner, Scrum Master, and Developers",
-          "Sprint cycles: planning meetings, daily standups, and reviews"
-        ],
-        readings: "Agile prioritizes iterative development. Scrum organizes work into short Sprints (usually 2 weeks). The Product Owner manages backlog prioritization, the Scrum Master resolves process obstacles, and Developers write the software.",
-        quiz: {
-          question: "In Scrum, who is responsible for managing the Product Backlog prioritization?",
-          options: ["Scrum Master", "Product Owner", "Lead Developer", "Project Manager"],
-          answer: "Product Owner",
-          explanation: "The Product Owner is solely responsible for prioritizing backlog items to align with user needs and business goals."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: Prioritization Frameworks & Product Strategy",
-        topics: [
-          "RICE prioritization (Reach, Impact, Confidence, Effort)",
-          "MoSCoW categorization (Must have, Should have, Could have, Won't have)",
-          "Mapping business ideas using the Lean Product Canvas"
-        ],
-        readings: "PMs must decide what features to build first under constraint. Use the RICE framework: (Reach * Impact * Confidence) / Effort to score ideas. Apply MoSCoW limits to determine absolute requirements for product releases.",
-        quiz: {
-          question: "What does the 'E' stand for in the RICE prioritization framework?",
-          options: ["Execution", "Efficiency", "Effort", "Engagement"],
-          answer: "Effort",
-          explanation: "Effort estimates the total person-weeks or hours required from the team to complete a feature."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: Product Analytics & Analytics Metrics",
-        topics: [
-          "Selecting North Star metrics and Key Performance Indicators (KPIs)",
-          "AARRR framework: Acquisition, Activation, Retention, Referral, Revenue",
-          "A/B testing flows, user tracking, and product feedback loops"
-        ],
-        readings: "Measure product success using metrics. The AARRR pirate metrics map user actions from first sign-up to payment. Identify a North Star Metric: the key measure of customer value. Validate new ideas with A/B experiments.",
-        quiz: {
-          question: "Which North Star Metric is most critical for evaluating daily retention in messaging platforms?",
-          options: ["Monthly Active Users", "Daily Active Users / Monthly Active Users Ratio", "Net Promoter Score", "Customer Acquisition Cost"],
-          answer: "Daily Active Users / Monthly Active Users Ratio",
-          explanation: "The DAU/MAU ratio measures user engagement stickiness, indicating how frequently users return to the platform."
-        }
-      }
-    ]
-  },
-  "Flutter development basic": {
-    tagline: "Explore Dart programming, Widget trees, row/column layouts, and State Management in Flutter.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Dart Basics & Flutter Setup",
-        topics: [
-          "Dart variables, control flows, objects, and types",
-          "Flutter setup, material design libraries, and pubspec.yaml assets",
-          "Entry functions: void main() and runApp() blocks"
-        ],
-        readings: "Flutter uses Apple's and Google's graphics engines to build multi-platform apps from one Dart codebase. Dart variables can be final (evaluated once at runtime) or const (evaluated at compile-time). Every app begins executing inside main().",
-        quiz: {
-          question: "Which Dart keyword is used to declare a variable whose value must be evaluated at compile-time?",
-          options: ["final", "const", "var", "dynamic"],
-          answer: "const",
-          explanation: "The const keyword indicates a compile-time constant, which is optimized by the compiler to reside in read-only memory."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: Component Trees: Stateless vs Stateful Widgets",
-        topics: [
-          "The Widget Tree, Element Tree, and RenderObject Tree",
-          "Stateless widgets for static view structures",
-          "Stateful widgets: lifecycle stages and trigger updates using setState()"
-        ],
-        readings: "In Flutter, everything is a widget. Stateless widgets do not store internal state. Stateful widgets store state in a separate State object, triggering UI updates with the setState() method.",
-        quiz: {
-          question: "Which method is triggered when a Stateful Widget needs to redraw its layout with updated values?",
-          options: ["build()", "initState()", "setState()", "dispose()"],
-          answer: "setState()",
-          explanation: "Calling setState() flags the framework that the internal state changed, scheduling a rebuild of the widget tree."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: Flutter Layouts & Multi-child Containers",
-        topics: [
-          "Standard layout widgets: Row, Column, Container, and Padding",
-          "Flexible alignments: Expanded, Flexible, and Spacer elements",
-          "Layering widgets using Stack and Positioned coordinates"
-        ],
-        readings: "Coordinate multi-child UI layouts in Flutter. Use Row to arrange children horizontally, Column to arrange them vertically, and Stack to overlap elements on top of each other. Use Expanded to fill remaining screen space.",
-        quiz: {
-          question: "Which widget allows children to overlap on top of each other in a coordinate layer?",
-          options: ["Column", "Row", "Stack", "ListView"],
-          answer: "Stack",
-          explanation: "The Stack widget paints its children relative to its container box, allowing them to overlap."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: State Management & ChangeNotifier Patterns",
-        topics: [
-          "Global state options: Provider, Riverpod, and InheritedWidgets",
-          "ChangeNotifier: declaring triggers and calling notifyListeners()",
-          "Consuming data models using Consumer and context.watch() contexts"
-        ],
-        readings: "Flutter state management syncs changes across routes. Using the Provider package, declare a ChangeNotifier model containing variables and triggers. Call notifyListeners() within state modifications to redraw consuming widgets.",
-        quiz: {
-          question: "What Flutter component is used to manage notifications and alert listeners to rebuild widgets?",
-          options: ["BuildContext", "Navigator", "ChangeNotifier", "InheritedWidget"],
-          answer: "ChangeNotifier",
-          explanation: "ChangeNotifier is a class in the Flutter SDK that sends notifications when properties are modified, triggering listener rebuilds."
-        }
-      }
-    ]
-  },
-  "Java basic": {
-    tagline: "Understand Java syntax, OOP inheritance/polymorphism, Collections frameworks, and Multithreading JVM internals.",
-    weeks: [
-      {
-        week: 1,
-        title: "Week 1: Java Basics, Compilation & JVM",
-        topics: [
-          "Java compilation flow: bytecode files (.class) and JVM execution",
-          "Variables, primitive data types (int, double, char), and operators",
-          "Control structures: conditionals (if-else, switch) and loop sequences"
-        ],
-        readings: "Java is a platform-independent, object-oriented programming language. The JDK compiler compiles source files into class files containing bytecode. The Java Virtual Machine (JVM) interprets or compiles this bytecode on target operating systems.",
-        quiz: {
-          question: "Which Java primitive type is used to represent single character values?",
-          options: ["String", "char", "Character", "byte"],
-          answer: "char",
-          explanation: "The char primitive type stores a single 16-bit Unicode character (like 'a' or 'B')."
-        }
-      },
-      {
-        week: 2,
-        title: "Week 2: Object-Oriented Java Programming (OOP)",
-        topics: [
-          "Declaring classes, objects, instance constructors, and parameters",
-          "OOP principles: Encapsulation, Inheritance, and Polymorphism",
-          "Method Overloading vs Method Overriding concepts"
-        ],
-        readings: "Java is built on OOP principles. Encapsulation hides object internals behind private fields. Inheritance lets a subclass inherit fields from a superclass. Polymorphism allows interfaces to represent multiple concrete types. Overriding redefines a superclass method in a subclass.",
-        quiz: {
-          question: "Which OOP concept allows a subclass to provide a specific implementation of a method already defined in its superclass?",
-          options: ["Overloading", "Overriding", "Encapsulation", "Polymorphism"],
-          answer: "Overriding",
-          explanation: "Method Overriding allows a subclass to redefine a method inherited from a superclass to provide specialized behavior."
-        }
-      },
-      {
-        week: 3,
-        title: "Week 3: Java Collections Framework & Exceptions",
-        topics: [
-          "Handling errors: try-catch-finally blocks and throw classes",
-          "List containers: ArrayList, LinkedList, and vector sequences",
-          "Set maps and unique associations: HashSet, TreeSet, and HashMap"
-        ],
-        readings: "Java Collections store groups of objects. Use List (ArrayList) for ordered sequences that can contain duplicates. Use Set (HashSet) for collections of unique items. Wrap risky code blocks (like operations on null pointers) in try-catch-finally statements.",
-        quiz: {
-          question: "Which Java collection class stores unique elements and does not guarantee insertion order?",
-          options: ["ArrayList", "HashMap", "HashSet", "LinkedList"],
-          answer: "HashSet",
-          explanation: "HashSet stores unique elements backed by a hash table, offering fast lookup times but no insertion order guarantees."
-        }
-      },
-      {
-        week: 4,
-        title: "Week 4: Threads, Concurrency & JVM Memory Model",
-        topics: [
-          "Creating execution threads: extending Thread vs implementing Runnable",
-          "Synchronization keywords and thread safety controls",
-          "JVM memory partitions: Stack frames vs Heap object allocations"
-        ],
-        readings: "Java programs run multithreaded tasks in parallel. Coordinate shared memory access between threads using the synchronized keyword, which locks access to a resource. Partitions split memory into local Stacks (for thread variables) and a shared Heap (for objects).",
-        quiz: {
-          question: "Which keyword in Java ensures that a method or block can be accessed by only one thread at a time?",
-          options: ["synchronized", "volatile", "static", "final"],
-          answer: "synchronized",
-          explanation: "The synchronized keyword prevents thread interference and memory consistency errors by locking access to methods or objects."
-        }
-      }
-    ]
-  }
+const CATEGORIZED_DOMAINS = {
+  "CSE / IT Domains": [
+    "Web Development (Frontend & Full Stack)",
+    "Python Full Stack",
+    "Machine Learning",
+    "Android App Development",
+    "Data Science",
+    "Artificial Intelligence",
+    "UI/UX",
+    "Cyber Security",
+    "Graphic Design",
+    "AR/VR",
+    "DevOps",
+    "Selenium Testing with Java",
+    "AWS",
+    "Java",
+    "Python",
+    "Data Structure & Algorithm with System Design",
+    "Generative AI",
+    "Data Engineering",
+    "Metaverse"
+  ],
+  "ECE Domains": [
+    "Embedded Systems",
+    "Hybrid Electric Vehicle",
+    "VLSI",
+    "IoT",
+    "Robotics",
+    "Power Systems"
+  ],
+  "Mechanical Engineering Domains": [
+    "AutoCAD",
+    "CATIA",
+    "Car Design",
+    "Industrial Robotics & Automation"
+  ],
+  "Civil Engineering Domains": [
+    "AutoCAD",
+    "Construction Planning & Structural Analysis"
+  ],
+  "Aeronautical": [
+    "Drone Technology"
+  ],
+  "Management & Commerce Domains": [
+    "Finance",
+    "Digital Marketing",
+    "HR Management",
+    "Business Analytics",
+    "Stock Marketing",
+    "SAP FICO",
+    "Supply Chain Management",
+    "Salesforce",
+    "Web 3.0",
+    "Investment Banking",
+    "ACCA F4 (Business & Corporate Law)",
+    "ServiceNow",
+    "Advanced Excel",
+    "Entrepreneurship"
+  ],
+  "Bio Domains": [
+    "Bioinformatics",
+    "Biostatistics",
+    "Microbiology",
+    "Molecular Biology",
+    "Medical Coding",
+    "Nano Science & Technology",
+    "Genetic Engineering",
+    "Pharmacovigilance"
+  ],
+  "Food Technology": [
+    "Food Science & Technology",
+    "Sensory Science",
+    "Nutrition & Health Management"
+  ],
+  "Nursing": [
+    "Pediatrics"
+  ],
+  "Other Domains": [
+    "Petroleum Engineering",
+    "Career Placement & Interview Mastery"
+  ]
 };
+
+const generateCurriculumForDomain = (domainName) => {
+  const lowercaseDomain = domainName.toLowerCase();
+  
+  if (lowercaseDomain.includes("web development") || lowercaseDomain.includes("full-stack")) {
+    return {
+      tagline: "Master modern full-stack web engineering, from layout design to interactive client-side routing and performance optimization.",
+      modules: [
+        {
+          title: "Module 1: Semantic HTML5, CSS Flexbox & CSS Grid",
+          topics: [
+            {
+              id: "1.1",
+              title: "Orientation: Web Development Learning Launchpad",
+              description: "Explore HTML5 semantic structure elements (header, footer, nav, article, section) and structural design guidelines.",
+              quote: "One sound idea is all that one needs to achieve success.",
+              quoteCredits: "Napoleon Hill",
+              lesson: "Web page structures rely on semantic HTML5 tags for accessibility and search engine optimization. For layout flow, use CSS Flexbox when aligning items along a single axis (row or column) to build dynamic responsive flows. Use CSS Grid when creating complex multi-dimensional page structures to manage rows and columns simultaneously. Avoid legacy floats or HTML table structures for general layouts.",
+              notes: "Key concepts to remember:\n- Always use <header>, <nav>, <main>, <article>, <section>, and <footer> tags.\n- Flexbox align-items aligns along the cross-axis, while justify-content aligns along the main-axis.\n- CSS Grid templates define fractional units (fr) for fluid column scaling."
+            },
+            {
+              id: "1.2",
+              title: "Responsive Web Frameworks & Media Rules",
+              description: "Learn how media queries and layout viewports construct fluid, multi-device interfaces.",
+              quote: "Design is not just what it looks like and feels like. Design is how it works.",
+              quoteCredits: "Steve Jobs",
+              lesson: "Fluid responsiveness is achieved via viewport directives and CSS media queries. By setting max-width and min-width boundaries, layouts scale gracefully from standard desktop displays down to mobile screens. Fluid typography scaling and grid column restructuring are critical for visual harmony across multi-device user bases.",
+              notes: "- viewport meta key is required: width=device-width, initial-scale=1.0\n- Utilize CSS custom properties (variables) to maintain theme parameters.\n- Define breakpoints dynamically in root style configurations."
+            }
+          ]
+        },
+        {
+          title: "Module 2: Advanced JavaScript (ES6+) & DOM Engine",
+          topics: [
+            {
+              id: "2.1",
+              title: "Asynchronous Web Flow & APIs",
+              description: "Master block-scoped variables, arrow logic, and asynchronous flows (async/await, Promises).",
+              quote: "First, solve the problem. Then, write the code.",
+              quoteCredits: "John Johnson",
+              lesson: "Modern ECMAScript (ES6+) provides powerful language paradigms. Block-scoped bindings (let/const) prevent leakage, while arrow functions resolve lexical context bindings. Asynchronous processes utilize native Promise wrappers, resolved cleanly using async/await syntax over network API streams.",
+              notes: "- let is block-scoped, const is read-only reference block.\n- Array methods .map(), .filter(), .reduce() are non-mutating helpers.\n- Always wrap fetch processes in standard try-catch blocks for reliability."
+            },
+            {
+              id: "2.2",
+              title: "DOM Node Interaction & Events",
+              description: "Learn Event Bubbling, capturing, and high-performance DOM manipulation patterns.",
+              quote: "Simplicity is the soul of efficiency.",
+              quoteCredits: "Austin Freeman",
+              lesson: "Interacting with the DOM requires binding callback functions to visual elements. Event propagation handles user inputs via bubbling upwards to root layouts. Use high-performance DocumentFragments to inject multiple nodes at once, keeping browser repaints and reflow calculations minimal.",
+              notes: "- event.preventDefault() stops native form submissions.\n- event.stopPropagation() halts bubble propagation cascades.\n- Delegate events to parent nodes to optimize event listener counts."
+            }
+          ]
+        },
+        {
+          title: "Module 3: React.js Component Architecture & Hooks",
+          topics: [
+            {
+              id: "3.1",
+              title: "React Components & State Reactivity",
+              description: "Build reusable, isolated component segments using state management hooks.",
+              quote: "React makes it painless to create interactive UIs.",
+              quoteCredits: "Meta Open Source",
+              lesson: "React splits layouts into functional, reusable component fragments. Components accept read-only attributes (props) and maintain local reactive state variables. Whenever a state change is scheduled, React re-evaluates the Virtual DOM tree, compiling only the minimal set of updates required.",
+              notes: "- State variables are registered using useState().\n- Lifting state up shares variables between child nodes via common parents.\n- Keep components pure: props and state inputs should produce deterministic UI."
+            },
+            {
+              id: "3.2",
+              title: "Effect Synchronization & Custom Hooks",
+              description: "Sync functional components with external network APIs via useEffect.",
+              quote: "The details are not the details. They make the design.",
+              quoteCredits: "Charles Eames",
+              lesson: "Side effects like fetching, listening to global windows, or tracking subscriptions run inside useEffect. The hook accepts a dependencies array to control execution. Avoid empty dependency arrays when values inside the callback require syncing on change.",
+              notes: "- useEffect runs asynchronously after component rendering updates.\n- Return cleanup functions to release memory and clear active event hooks.\n- Extract shared state logic into reusable custom hooks (usePrefix)."
+            }
+          ]
+        },
+        {
+          title: "Module 4: Performance, Security & Production Deployment",
+          topics: [
+            {
+              id: "4.1",
+              title: "Next.js Architecture & Optimization",
+              description: "Learn Static Site Generation (SSG) and Server-Side Rendering (SSR) in Next.js.",
+              quote: "Speed is a feature. Make your apps fast.",
+              quoteCredits: "Google Performance",
+              lesson: "Production-ready systems compile code into optimized bundles. Using Next.js, pages can be pre-rendered dynamically at build time (SSG) or request time (SSR). Optimize image loading using specialized tags, and implement route-based code splitting to maximize initial load performance scorecards.",
+              notes: "- next/image provides automated size optimization and lazy loading.\n- Dynamic imports split components into separate bundle files.\n- Security headers must restrict script loading vectors (CSP)."
+            },
+            {
+              id: "4.2",
+              title: "CORS Security & API Deployments",
+              description: "Secure cross-origin routes and deploy applications to edge networks.",
+              quote: "Security is not a product, but a process.",
+              quoteCredits: "Bruce Schneier",
+              lesson: "Deploying applications requires configuring build environments and securing gateways. Cross-Origin Resource Sharing (CORS) headers define authorized web origins allowed to fetch backend endpoints. Ensure proper authorization tokens are attached to request headers before processing CRUD database updates.",
+              notes: "- Access-Control-Allow-Origin defines API resource scope restrictions.\n- Deploy static frontend segments using automated continuous pipelines (CI/CD).\n- Configure secure environment parameters for API keys."
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  if (lowercaseDomain.includes("ui/ux") || lowercaseDomain.includes("ui ux")) {
+    return {
+      tagline: "Explore modern design systems, user empathy mapping, responsive wireframing, and interactive UI prototyping.",
+      modules: [
+        {
+          title: "Module 1: Design Thinking (Empathize & Define)",
+          topics: [
+            {
+              id: "1.1",
+              title: "User Research & Persona Development",
+              description: "Learn the stages of design thinking and compile empathy charts to map target demographics.",
+              quote: "Design is intelligence made visible.",
+              quoteCredits: "Alina Wheeler",
+              lesson: "Design thinking begins with user research. Conduct empathy cycles by listening to user interactions and logging daily frustration thresholds. Translate notes into user personas—fictional models representing distinct audience subsets—to align design decisions with authentic user scenarios.",
+              notes: "- The 5 phases: Empathize, Define, Ideate, Prototype, Test.\n- Journey maps represent a user's flow through tasks step-by-step.\n- Problem statements focus on target user needs without pre-assuming solutions."
+            },
+            {
+              id: "1.2",
+              title: "Information Architecture & Card Sorting",
+              description: "Organize layout taxonomies and design clear user paths through structure sorting.",
+              quote: "Good design is obvious. Great design is transparent.",
+              quoteCredits: "Joe Sparano",
+              lesson: "Information Architecture (IA) establishes page hierarchies, category splits, and structural navigation paths. Card sorting studies group content sections logically to ensure layout terminology matches standard mental models, minimizing navigational friction.",
+              notes: "- Sitemap diagrams map primary and secondary page hierarchies.\n- Open card sorting allows users to create their own category names.\n- Closed card sorting matches items into predefined lists."
+            }
+          ]
+        },
+        {
+          title: "Module 2: Wireframing & Responsive Figma Design",
+          topics: [
+            {
+              id: "2.1",
+              title: "Low-Fidelity Sketching & Auto Layout",
+              description: "Build flexible, responsive layouts in Figma using Auto-Layout frames.",
+              quote: "Simple is harder than complex.",
+              quoteCredits: "Steve Jobs",
+              lesson: "Figma is the industry-standard layout interface tool. Begin drafts with low-fidelity layouts to focus on content flow rather than color cosmetics. Use Figma Auto Layout properties to create fluid elements that expand or shift automatically as dimensions scale.",
+              notes: "- Low-fidelity frames use placeholder boxes (crossed X) for images.\n- Auto Layout controls paddings, item alignments, and wrap directions.\n- Nested frames allow responsive scaling within complex cards."
+            },
+            {
+              id: "2.2",
+              title: "Color Theory & Contrast Accessibility",
+              description: "Verify contrast guidelines to build highly readable color systems.",
+              quote: "Color is a power which directly influences the soul.",
+              quoteCredits: "Wassily Kandinsky",
+              lesson: "Establish visual hierarchy using size, contrast, and color weights. Ensure all text and element contrast levels meet Web Content Accessibility Guidelines (WCAG) AAA scores, guaranteeing layouts remain readable for users with visual impairments.",
+              notes: "- Monochromatic schemes utilize gradients of a single color.\n- AAA guidelines require a 4.5:1 ratio for normal body text.\n- Use dark mode themes to reduce eye strain and conserve mobile battery."
+            }
+          ]
+        },
+        {
+          title: "Module 3: High-Fidelity Prototyping & Interactions",
+          topics: [
+            {
+              id: "3.1",
+              title: "Smart Animate & Transition Triggers",
+              description: "Create interactive user test paths using advanced Figma animation rules.",
+              quote: "If you do it right, it will last forever.",
+              quoteCredits: "Massimo Vignelli",
+              lesson: "Prototyping brings layout files to life. In Figma, connect trigger nodes to target pages. Utilize Smart Animate transitions to interpolates position shifts, transitions, and state swaps automatically, mimicking actual code animations.",
+              notes: "- Triggers include: On Click, On Hover, On Drag, After Delay.\n- Component Sets group distinct button state variants (Hover, Active).\n- Maintain matching element names across frames to enable Smart Animate overrides."
+            },
+            {
+              id: "3.2",
+              title: "Design Systems & Pattern Tokens",
+              description: "Build atomic design libraries with reusable component patterns and design tokens.",
+              quote: "Styles come and go. Good design is a language.",
+              quoteCredits: "Massimo Vignelli",
+              lesson: "Design systems keep interfaces consistent as platforms expand. Establish design tokens (variables) for typography sizing, padding values, color palettes, and shadow parameters. Build components starting with basic elements (atoms) up to complex widgets.",
+              notes: "- Design tokens decouple styles from absolute code values.\n- Atomic Design levels: Atoms, Molecules, Organisms, Templates, Pages.\n- Changing main components instantly propagates style updates globally."
+            }
+          ]
+        },
+        {
+          title: "Module 4: Usability Testing & Analytics Verification",
+          topics: [
+            {
+              id: "4.1",
+              title: "Heuristic Assessments & User Walkthroughs",
+              description: "Audit interface layouts against Nielsen's 10 Usability Principles.",
+              quote: "Supposing is good, but finding out is better.",
+              quoteCredits: "Mark Twain",
+              lesson: "Usability testing gathers user feedback before finalizing code. Evaluate layouts against Nielsen's 10 Usability Heuristics, checking that users have control to undo actions, see visible system status, and recover from errors.",
+              notes: "- User testing identifies behavioral blocks through direct observation.\n- Standard heuristics require clear back out paths (Emergency Exits).\n- Maintain layout consistency to match common user expectation models."
+            },
+            {
+              id: "4.2",
+              title: "A/B Testing & Design Success Metrics",
+              description: "Run cohort studies and evaluate layout modifications using statistical metrics.",
+              quote: "Without data, you're just another person with an opinion.",
+              quoteCredits: "W. Edwards Deming",
+              lesson: "A/B testing evaluates layout changes by distributing variants to different user groups. Measure design effectiveness using activation rates, retention metrics, task completion speed, and satisfaction surveys (NPS) to prove value.",
+              notes: "- A/B tests modify only one design variable at a time (e.g. CTA location).\n- Conversion rate calculations prove if new designs drive target actions.\n- UX metrics validate layout investments using business indicators."
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  // Fallback dynamic generator
+  const defaultTagline = `Advance your knowledge in ${domainName} with structured modules, interactive lessons, and revision checklists.`;
+  return {
+    tagline: defaultTagline,
+    modules: [
+      {
+        title: `Module 1: Foundations of ${domainName}`,
+        topics: [
+          {
+            id: "1.1",
+            title: `Orientation: ${domainName} Learning Launchpad`,
+            description: `Explore the core principles, terminology, and historical baseline of ${domainName}.`,
+            quote: "An investment in knowledge pays the best interest.",
+            quoteCredits: "Benjamin Franklin",
+            lesson: `Stepping into ${domainName} requires establishing a strong foundation of core theories, workflows, and tools. Understanding the landscape allows you to frame problems clearly, identify standard industry methodologies, and utilize key principles to resolve real-world scenarios. Focus on mastering key structural concepts before moving into complex implementations.`,
+            notes: `Key concepts to remember:\n- Core definitions and parameters of ${domainName}.\n- Basic workflows and operational guidelines.\n- Key performance indicators and terminology.`
+          },
+          {
+            id: "1.2",
+            title: `Ecosystem Overview & Basic Tooling`,
+            description: `Learn the essential software, libraries, and frameworks used by practitioners of ${domainName}.`,
+            quote: "Technology is best when it brings people together.",
+            quoteCredits: "Matt Mullenweg",
+            lesson: `Every modern domain relies on an ecosystem of specialized tools, software, and methods. In this section, we examine the primary systems and frameworks used in ${domainName}. Familiarizing yourself with these standards allows for cleaner collaboration and alignment with industry best practices, ensuring your work matches current standards.`,
+            notes: `- Primary toolkit configurations.\n- Standard interface guidelines and system parameters.\n- Documentation resources for active references.`
+          }
+        ]
+      },
+      {
+        title: `Module 2: Intermediate Frameworks & Design`,
+        topics: [
+          {
+            id: "2.1",
+            title: `Implementing ${domainName} Strategies`,
+            description: `Coordinate parameters, construct models, and map out operations.`,
+            quote: "Details matter. They make the design.",
+            quoteCredits: "Charles Eames",
+            lesson: `Applying concepts requires shifting from theoretical definitions to structural models. We analyze how parameters interact, how database or mechanical systems coordinate, and how variables are managed to maintain project goals. Regular checks ensure that processes scale gracefully and avoid common failure points.`,
+            notes: `- Step-by-step implementation blueprints.\n- Common bottlenecks and design challenges.\n- Data input styling and configuration metrics.`
+          },
+          {
+            id: "2.2",
+            title: `Case Study: Industry Standards and Workflow`,
+            description: `Analyze actual operational scenarios and breakdown workflow steps.`,
+            quote: "Learn from yesterday, live for today, hope for tomorrow.",
+            quoteCredits: "Albert Einstein",
+            lesson: `Reviewing actual projects helps translate general concepts into practical lessons. We break down historical case studies in ${domainName}, detailing the initial constraints, the execution steps taken, and how final outcomes were calculated. Learning from these examples highlights standard issues to avoid and patterns to follow.`,
+            notes: `- Real-world project post-mortem steps.\n- Best practices for system setup.\n- Verification and evaluation guidelines.`
+          }
+        ]
+      },
+      {
+        title: `Module 3: Advanced Architectures & Systems`,
+        topics: [
+          {
+            id: "3.1",
+            title: "Optimization & Advanced Toolsets",
+            description: `Maximize efficiency, reduce latency, and tune parameters in ${domainName}.`,
+            quote: "Simplicity is the ultimate sophistication.",
+            quoteCredits: "Leonardo da Vinci",
+            lesson: `Once a system is functional, the focus shifts to optimization. We explore methods to refine performance, clean up calculations, and speed up loops. Applying these strategies helps reduce resource usage, decrease response times, and improve overall output quality.`,
+            notes: `- Performance optimization checklist.\n- Advanced software extensions and integrations.\n- Monitoring parameters and logging strategies.`
+          },
+          {
+            id: "3.2",
+            title: "Security, Scaling, and Professional Ethics",
+            description: `Protect application boundaries and ensure ethical compliance guidelines are met.`,
+            quote: "The only limit to our realization of tomorrow will be our doubts of today.",
+            quoteCredits: "Franklin D. Roosevelt",
+            lesson: `Operating at scale requires establishing secure boundaries and adhering to professional standards. We examine security parameters, data protection protocols, and ethical compliance guidelines within ${domainName}. Maintaining these metrics prevents vulnerabilities and aligns your practice with recognized standards.`,
+            notes: `- Basic security configurations.\n- Compliance requirements and review steps.\n- Scaling best practices and fallback designs.`
+          }
+        ]
+      },
+      {
+        title: `Module 4: Project Capstone & Careers`,
+        topics: [
+          {
+            id: "4.1",
+            title: "Hands-on Capstone Walkthrough",
+            description: `Build a comprehensive project applying all modules learned throughout the syllabus.`,
+            quote: "The secret of getting ahead is getting started.",
+            quoteCredits: "Mark Twain",
+            lesson: `The capstone project compiles all modules into a practical project. In this lesson, we walk through setting up the initial blueprints, coordinating the different components, and resolving edge case issues. Completing this project demonstrates your proficiency and provides a key asset for your professional portfolio.`,
+            notes: `- Complete blueprint layout.\n- Integration check steps.\n- Testing and verification patterns.`
+          },
+          {
+            id: "4.2",
+            title: "Review & Career Placement",
+            description: `Refine your resume and prepare for technical interviews in ${domainName}.`,
+            quote: "Opportunities don't happen. You create them.",
+            quoteCredits: "Chris Grosser",
+            lesson: `In this final topic, we discuss career placement paths, portfolio presentation guidelines, and typical technical questions asked in interviews. We focus on how to explain design choices, demonstrate problem-solving skills, and highlight your familiarity with industry standards.`,
+            notes: `- Portfolio checklist.\n- Key questions and answers for technical interviews.\n- Industry resources and job board portals.`
+          }
+        ]
+      }
+    ]
+  };
+};
+
+const courseData = new Proxy({}, {
+  get: (target, name) => {
+    return generateCurriculumForDomain(name);
+  }
+});

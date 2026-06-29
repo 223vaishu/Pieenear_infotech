@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [studentPassword, setStudentPassword] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState("Web Development");
+  const [selectedCourse, setSelectedCourse] = useState("Web Development (Frontend & Full Stack)");
 
   // Exam builder states
   const [showCreateExam, setShowCreateExam] = useState(false);
@@ -849,14 +849,86 @@ export default function AdminDashboard() {
                         value={selectedCourse}
                         onChange={(e) => setSelectedCourse(e.target.value)}
                       >
-                        <option value="Web Development">Web Development</option>
-                        <option value="App Development">App Development</option>
-                        <option value="UI ux">UI ux</option>
-                        <option value="AI/ML basic">AI/ML basic</option>
-                        <option value="System desgin basic">System desgin basic</option>
-                        <option value="product mangement">product mangement</option>
-                        <option value="Flutter development basic">Flutter development basic</option>
-                        <option value="Java basic">Java basic</option>
+                        <optgroup label="CSE / IT Domains">
+                          <option value="Web Development (Frontend & Full Stack)">Web Development (Frontend & Full Stack)</option>
+                          <option value="Python Full Stack">Python Full Stack</option>
+                          <option value="Machine Learning">Machine Learning</option>
+                          <option value="Android App Development">Android App Development</option>
+                          <option value="Data Science">Data Science</option>
+                          <option value="Artificial Intelligence">Artificial Intelligence</option>
+                          <option value="UI/UX">UI/UX</option>
+                          <option value="Cyber Security">Cyber Security</option>
+                          <option value="Graphic Design">Graphic Design</option>
+                          <option value="AR/VR">AR/VR</option>
+                          <option value="DevOps">DevOps</option>
+                          <option value="Selenium Testing with Java">Selenium Testing with Java</option>
+                          <option value="AWS">AWS</option>
+                          <option value="Java">Java</option>
+                          <option value="Python">Python</option>
+                          <option value="Data Structure & Algorithm with System Design">Data Structure & Algorithm with System Design</option>
+                          <option value="Generative AI">Generative AI</option>
+                          <option value="Data Engineering">Data Engineering</option>
+                          <option value="Metaverse">Metaverse</option>
+                        </optgroup>
+                        <optgroup label="ECE Domains">
+                          <option value="Embedded Systems">Embedded Systems</option>
+                          <option value="Hybrid Electric Vehicle">Hybrid Electric Vehicle</option>
+                          <option value="VLSI">VLSI</option>
+                          <option value="IoT">IoT</option>
+                          <option value="Robotics">Robotics</option>
+                          <option value="Power Systems">Power Systems</option>
+                        </optgroup>
+                        <optgroup label="Mechanical Engineering Domains">
+                          <option value="AutoCAD">AutoCAD (Mechanical)</option>
+                          <option value="CATIA">CATIA</option>
+                          <option value="Car Design">Car Design</option>
+                          <option value="Industrial Robotics & Automation">Industrial Robotics & Automation</option>
+                        </optgroup>
+                        <optgroup label="Civil Engineering Domains">
+                          <option value="AutoCAD">AutoCAD (Civil)</option>
+                          <option value="Construction Planning & Structural Analysis">Construction Planning & Structural Analysis</option>
+                        </optgroup>
+                        <optgroup label="Aeronautical">
+                          <option value="Drone Technology">Drone Technology</option>
+                        </optgroup>
+                        <optgroup label="Management & Commerce Domains">
+                          <option value="Finance">Finance</option>
+                          <option value="Digital Marketing">Digital Marketing</option>
+                          <option value="HR Management">HR Management</option>
+                          <option value="Business Analytics">Business Analytics</option>
+                          <option value="Stock Marketing">Stock Marketing</option>
+                          <option value="SAP FICO">SAP FICO</option>
+                          <option value="Supply Chain Management">Supply Chain Management</option>
+                          <option value="Salesforce">Salesforce</option>
+                          <option value="Web 3.0">Web 3.0</option>
+                          <option value="Investment Banking">Investment Banking</option>
+                          <option value="ACCA F4 (Business & Corporate Law)">ACCA F4 (Business & Corporate Law)</option>
+                          <option value="ServiceNow">ServiceNow</option>
+                          <option value="Advanced Excel">Advanced Excel</option>
+                          <option value="Entrepreneurship">Entrepreneurship</option>
+                        </optgroup>
+                        <optgroup label="Bio Domains">
+                          <option value="Bioinformatics">Bioinformatics</option>
+                          <option value="Biostatistics">Biostatistics</option>
+                          <option value="Microbiology">Microbiology</option>
+                          <option value="Molecular Biology">Molecular Biology</option>
+                          <option value="Medical Coding">Medical Coding</option>
+                          <option value="Nano Science & Technology">Nano Science & Technology</option>
+                          <option value="Genetic Engineering">Genetic Engineering</option>
+                          <option value="Pharmacovigilance">Pharmacovigilance</option>
+                        </optgroup>
+                        <optgroup label="Food Technology">
+                          <option value="Food Science & Technology">Food Science & Technology</option>
+                          <option value="Sensory Science">Sensory Science</option>
+                          <option value="Nutrition & Health Management">Nutrition & Health Management</option>
+                        </optgroup>
+                        <optgroup label="Nursing">
+                          <option value="Pediatrics">Pediatrics</option>
+                        </optgroup>
+                        <optgroup label="Other Domains">
+                          <option value="Petroleum Engineering">Petroleum Engineering</option>
+                          <option value="Career Placement & Interview Mastery">Career Placement & Interview Mastery</option>
+                        </optgroup>
                       </select>
                     </div>
                     <div className="form-group" style={{ flex: 1 }}>
